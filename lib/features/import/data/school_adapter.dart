@@ -61,13 +61,22 @@ class ExtractedCourse {
   });
 
   factory ExtractedCourse.fromJson(Map<String, dynamic> json) {
+    final dayOfWeek = json['dayOfWeek'] as int? ?? 1;
+    final startSection = json['startSection'] as int? ?? 1;
+    final endSection = json['endSection'] as int? ?? 1;
+    assert(dayOfWeek >= 1 && dayOfWeek <= 7,
+        'dayOfWeek out of range: $dayOfWeek');
+    assert(startSection >= 1 && startSection <= 20,
+        'startSection out of range: $startSection');
+    assert(endSection >= startSection,
+        'endSection ($endSection) < startSection ($startSection)');
     return ExtractedCourse(
       name: json['name'] as String? ?? '',
       teacher: json['teacher'] as String?,
       location: json['location'] as String?,
-      dayOfWeek: json['dayOfWeek'] as int? ?? 1,
-      startSection: json['startSection'] as int? ?? 1,
-      endSection: json['endSection'] as int? ?? 1,
+      dayOfWeek: dayOfWeek,
+      startSection: startSection,
+      endSection: endSection,
       weeks: (json['weeks'] as List<dynamic>?)
               ?.map((e) => e as int)
               .toList() ??
@@ -77,7 +86,7 @@ class ExtractedCourse {
 }
 
 /// 已注册的学校适配器列表。
-final List<SchoolAdapter> schoolAdapters = [
+final List<SchoolAdapter> schoolAdapters = List.unmodifiable([
   CquAdapter(),
   JufeAdapter(),
-];
+]);

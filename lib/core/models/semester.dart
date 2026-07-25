@@ -19,13 +19,17 @@ class Semester {
     String? name,
     DateTime? startDate,
     int? totalWeeks,
-    int? currentWeekOverride,
+    Object? currentWeekOverride = _sentinel,
   }) =>
       Semester(
         id: id ?? this.id,
         name: name ?? this.name,
         startDate: startDate ?? this.startDate,
         totalWeeks: totalWeeks ?? this.totalWeeks,
-        currentWeekOverride: currentWeekOverride ?? this.currentWeekOverride,
+        currentWeekOverride: identical(currentWeekOverride, _sentinel)
+            ? this.currentWeekOverride
+            : currentWeekOverride as int?,
       );
+
+  static const _sentinel = Object();
 }

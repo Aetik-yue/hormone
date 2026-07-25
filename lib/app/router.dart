@@ -17,7 +17,7 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/course/edit',
       builder: (context, state) =>
-          CourseEditScreen(courseId: state.extra as String?),
+          CourseEditScreen(courseId: state.extra is String ? state.extra as String : null),
     ),
     GoRoute(
       path: '/semester',

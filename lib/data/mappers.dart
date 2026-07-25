@@ -28,7 +28,8 @@ extension CourseEntityMapper on db.Course {
             : weeks
                 .split(',')
                 .where((e) => e.isNotEmpty)
-                .map((e) => int.parse(e))
+                .map((e) => int.tryParse(e.trim()))
+                .whereType<int>()
                 .toList(),
         colorValue: colorValue,
         notes: notes,
@@ -64,13 +65,12 @@ extension SemesterEntityMapper on db.Semester {
 }
 
 extension SemesterDomainMapper on Semester {
-  db.SemestersCompanion toCompanion({bool isActive = false}) =>
+  db.SemestersCompanion toCompanion() =>
       db.SemestersCompanion(
         id: Value(id),
         name: Value(name),
         startDate: Value(startDate),
         totalWeeks: Value(totalWeeks),
         currentWeekOverride: Value(currentWeekOverride),
-        isActive: Value(isActive),
       );
 }

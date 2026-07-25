@@ -37,7 +37,11 @@ class CourseRepository {
   }
 
   /// 插入或更新（id 相同则冲突更新），供编辑页与导入复用。
+  /// [course.id] 必须非空，否则多条记录会碰撞到同一行。
   Future<void> upsert(Course course) async {
+    if (course.id.isEmpty) {
+      throw ArgumentError('Course.id must not be empty');
+    }
     await _db
         .into(_db.courses)
         .insertOnConflictUpdate(course.toCompanion());

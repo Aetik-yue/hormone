@@ -53,7 +53,7 @@ class ImportState {
       ImportState(
         status: status ?? this.status,
         courses: courses ?? this.courses,
-        errorMessage: errorMessage,
+        errorMessage: errorMessage ?? this.errorMessage,
         importedCount: importedCount ?? this.importedCount,
         skipped: skipped ?? this.skipped,
         totalWeeks: totalWeeks ?? this.totalWeeks,
@@ -74,6 +74,12 @@ class ImportNotifier extends StateNotifier<ImportState> {
 
   /// 拉起文件选择器 → 读取内容 → 按扩展名分派解析 → 进入预览。
   Future<void> pickAndParse() async {
+    // 防止重入：已在进行中时忽略后续调用。
+    if (state.status != ImportStatus.idle &&
+        state.status != ImportStatus.error &&
+        state.status != ImportStatus.done) {
+      return;
+    }
     state = state.copyWith(status: ImportStatus.picking, errorMessage: null);
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -100,11 +106,12 @@ class ImportNotifier extends StateNotifier<ImportState> {
         return;
       }
 
-      final courses = _parseByType(ext, content, semester);
+      final (courses, skipped) = _parseByType(ext, content, semester);
       if (courses.isEmpty) {
         state = state.copyWith(
           status: ImportStatus.error,
           errorMessage: '未能从文件中解析出任何课程，请检查格式。',
+          skipped: skipped,
         );
         return;
       }
@@ -112,7 +119,7 @@ class ImportNotifier extends StateNotifier<ImportState> {
         status: ImportStatus.preview,
         courses: courses,
         totalWeeks: semester.totalWeeks,
-        skipped: const [],
+        skipped: skipped,
       );
     } catch (e) {
       state = state.copyWith(
@@ -182,24 +189,30 @@ class ImportNotifier extends StateNotifier<ImportState> {
     return repo.getActiveSemester();
   }
 
-  List<ImportCourse> _parseByType(
+  (List<ImportCourse>, List<String>) _parseByType(
     String ext,
     String content,
     Semester semester,
   ) {
     switch (ext) {
       case 'json':
-        return JsonCourseImporter.parse(
+        final result = JsonCourseImporter.parse(
           content,
           totalWeeks: semester.totalWeeks,
         );
+        return (result.courses, result.skipped);
       case 'ics':
-      default:
-        return IcsCourseParser.parse(
-          content,
-          semesterStart: semester.startDate,
-          totalWeeks: semester.totalWeeks,
+        return (
+          IcsCourseParser.parse(
+            content,
+            semesterStart: semester.startDate,
+            totalWeeks: semester.totalWeeks,
+          ),
+          const <String>[],
         );
+      default:
+        // 不支持的格式，返回空。
+        return (const <ImportCourse>[], const <String>[]);
     }
   }
 
@@ -207,8 +220,8 @@ class ImportNotifier extends StateNotifier<ImportState> {
     if (file.bytes != null) {
       return utf8.decode(file.bytes as Uint8List, allowMalformed: true);
     }
-    // 极端情况下无字节（理论上 withData:true 总有），兜底为空。
-    return '';
+    // withData:true 应始终提供字节；缺失视为错误。
+    throw Exception('无法读取文件内容，请重试。');
   }
 }
 

@@ -26,8 +26,11 @@ import 'package:hormone/features/import/domain/import_course.dart';
 ///
 /// 容错策略：单条记录字段非法时跳过该条并计入 [skipped]，其余照常导入。
 class JsonCourseImporter {
-  /// 返回导入课程；[skipped] 为被忽略的条数（用于 UI 提示）。
-  static List<ImportCourse> parse(String jsonText, {int? totalWeeks}) {
+  /// 返回导入课程与跳过的条目（用于 UI 提示）。
+  static ({List<ImportCourse> courses, List<String> skipped}) parse(
+    String jsonText, {
+    int? totalWeeks,
+  }) {
     final skipped = <String>[];
     final List<dynamic> rawList;
 
@@ -43,7 +46,7 @@ class JsonCourseImporter {
     } on FormatException {
       rethrow;
     } catch (e) {
-      throw const FormatException('无法解析 JSON');
+      throw FormatException('无法解析 JSON: $e');
     }
 
     final result = <ImportCourse>[];
@@ -57,7 +60,7 @@ class JsonCourseImporter {
       final course = _parseOne(map, i, totalWeeks, skipped);
       if (course != null) result.add(course);
     }
-    return result;
+    return (courses: result, skipped: skipped);
   }
 
   static ImportCourse? _parseOne(

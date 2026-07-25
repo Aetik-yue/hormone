@@ -22,12 +22,25 @@ class SemesterRepository {
   }
 
   /// 返回当前激活学期；若无任何学期，先播种默认学期再返回。
+  /// 若已有学期但都未激活，将第一个设为激活并返回。
   Future<Semester?> getActiveSemester() async {
     await _db.seedDefaultSemester();
+
     final rows = await (_db.select(_db.semesters)
           ..where((s) => s.isActive.equals(true)))
         .get();
-    return rows.isEmpty ? null : rows.first.toDomain();
+    if (rows.isNotEmpty) return rows.first.toDomain();
+
+    // 有学期但都未激活：将第一个设为激活。
+    final anySemester = await _db.select(_db.semesters).get();
+    if (anySemester.isNotEmpty) {
+      await (_db.update(_db.semesters)
+            ..where((s) => s.id.equals(anySemester.first.id)))
+          .write(const db.SemestersCompanion(isActive: Value(true)));
+      return anySemester.first.toDomain();
+    }
+
+    return null;
   }
 
   /// 设为唯一激活学期（其余置为非激活）。
@@ -45,8 +58,9 @@ class SemesterRepository {
     });
   }
 
-  Future<void> upsert(Semester semester, {bool activate = false}) async {
-    final companion = semester.toCompanion(isActive: activate);
+  /// 插入或更新（id 相同则冲突更新）。激活请使用 [setActive]。
+  Future<void> upsert(Semester semester) async {
+    final companion = semester.toCompanion();
     await _db
         .into(_db.semesters)
         .insertOnConflictUpdate(companion);

@@ -21,15 +21,19 @@ class SelectedWeekNotifier extends StateNotifier<int> {
   }
 
   Future<void> _init() async {
-    final semester = await _repo.getActiveSemester();
-    if (semester == null) return;
-    // 优先使用手动覆盖的当前周（调课/假期），否则按开学日期推算。
-    final computed = semester.currentWeekOverride ??
-        computeCurrentWeek(semester.startDate, DateTime.now());
-    final capped = computed < 1
-        ? 1
-        : (computed > semester.totalWeeks ? semester.totalWeeks : computed);
-    if (!_userChanged) state = capped;
+    try {
+      final semester = await _repo.getActiveSemester();
+      if (semester == null) return;
+      // 优先使用手动覆盖的当前周（调课/假期），否则按开学日期推算。
+      final computed = semester.currentWeekOverride ??
+          computeCurrentWeek(semester.startDate, DateTime.now());
+      final capped = computed < 1
+          ? 1
+          : (computed > semester.totalWeeks ? semester.totalWeeks : computed);
+      if (!_userChanged) state = capped;
+    } catch (_) {
+      // 数据库异常时保持默认第 1 周，避免首屏崩溃。
+    }
   }
 
   /// 手动跳转到指定周（用户操作或小组件深链）。

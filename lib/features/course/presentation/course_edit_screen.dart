@@ -89,7 +89,17 @@ class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
       );
       return;
     }
-    final ok = await ref.read(courseFormProvider.notifier).save();
+    bool ok;
+    try {
+      ok = await ref.read(courseFormProvider.notifier).save();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存失败：$e')),
+        );
+      }
+      return;
+    }
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请先在「学期管理」中创建学期')),
@@ -339,7 +349,16 @@ class _CourseFormBodyState extends ConsumerState<CourseFormBody> {
       ),
     );
     if (confirmed == true) {
-      await ref.read(courseRepositoryProvider).delete(id);
+      try {
+        await ref.read(courseRepositoryProvider).delete(id);
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('删除失败：$e')),
+          );
+        }
+        return;
+      }
       ref.read(widgetServiceProvider).updateTodayWidget();
       if (context.mounted) context.pop();
     }
@@ -387,7 +406,7 @@ class _SectionDropdown extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
-          value: value,
+          value: value > 0 && value <= maxSections ? value : null,
           isExpanded: true,
           items: List.generate(maxSections, (i) {
             final s = i + 1;

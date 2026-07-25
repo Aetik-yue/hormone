@@ -51,6 +51,14 @@ app.*.map.json
 # Build artifacts (APK releases)
 /version/
 
+# Sensitive & environment
+.env
+.env.*
+*.pem
+google-services.json
+GoogleService-Info.plist
+key.properties
+
 # Tool/internal files
 .workbuddy/
 .metadata

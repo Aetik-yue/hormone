@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 配色参考 WakeUp 课表：柔白底 + 低饱和强调色，卡片化、清爽。
+/// Color palette inspired by WakeUp: soft white background + low-saturation accent, card-based, clean.
 class AppColors {
   static const primary = Color(0xFF5B8DEF);
   static const backgroundLight = Color(0xFFF7F8FA);
@@ -9,6 +9,7 @@ class AppColors {
   static const surfaceDark = Color(0xFF1C1E27);
   static const textLight = Color(0xFF1B1D23);
   static const textDark = Color(0xFFE8E9EE);
+  // TODO: intended for secondary text, to be used in widget styling
   static const textMuted = Color(0xFF9AA0AB);
 }
 

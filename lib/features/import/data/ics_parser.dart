@@ -43,7 +43,7 @@ class IcsCourseParser {
       final end = ev['DTEND'] != null ? _parseDateTime(ev['DTEND']!) : null;
 
       final rrule = ev['RRULE'];
-      final interval = _parseInterval(rrule) ?? 1;
+      final interval = (_parseInterval(rrule) ?? 1).clamp(1, 52);
       final count = _parseCount(rrule);
       final until = _parseUntil(rrule);
       final byDays = _parseByDays(rrule);
@@ -100,11 +100,13 @@ class IcsCourseParser {
     if (parts.length != 2) return 1;
     final mins = (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
     int best = 1;
-    AppConstants.sectionStartTimes.forEach((sec, st) {
-      final sp = st.split(':');
+    final sorted = AppConstants.sectionStartTimes.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    for (final e in sorted) {
+      final sp = e.value.split(':');
       final sm = (int.tryParse(sp[0]) ?? 0) * 60 + (int.tryParse(sp[1]) ?? 0);
-      if (sm <= mins) best = sec;
-    });
+      if (sm <= mins) best = e.key;
+    }
     return best;
   }
 
@@ -125,9 +127,9 @@ class IcsCourseParser {
       k++;
       if (count != null && k >= count) break;
       if (until != null) {
-        // 计算下一周对应的真实日期，判断是否已超过 UNTIL。
+        // Compute the actual course date for the next occurrence.
         final nextDate =
-            semesterStart.add(Duration(days: (w + interval - 1) * 7));
+            semesterStart.add(Duration(days: k * interval * 7));
         if (nextDate.isAfter(until)) break;
       }
       w += interval;
@@ -247,10 +249,10 @@ class IcsCourseParser {
   /// 从 DESCRIPTION 提取教师（形如 "教师: 张三" / "teacher:张三" / "张三"）。
   static String? _extractTeacher(String? description) {
     if (description == null || description.isEmpty) return null;
-    final m = RegExp(r'(?:教师|teacher|授课教师)\s*[:：]\s*(\S+)',
+    final m = RegExp(r'(?:教师|teacher|授课教师)\s*[:：]\s*(.+)',
             caseSensitive: false)
         .firstMatch(description);
-    if (m != null) return m.group(1);
+    if (m != null) return m.group(1)?.trim();
     // 退而求其次：取第一句非空文本作为教师。
     final first = description.split(RegExp(r'[\n;；]')).first.trim();
     return first.isEmpty ? null : first;

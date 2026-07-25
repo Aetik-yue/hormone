@@ -16,6 +16,9 @@ final courseInitialProvider =
   if (courseId != null && courseId.isNotEmpty) {
     final existing = await courseRepo.getCourse(courseId);
     if (existing != null) return existing;
+    // Course not found for the given ID — could be deleted or invalid.
+    // Throw so the UI can show an error instead of silently creating a blank course.
+    throw StateError('课程不存在：$courseId');
   }
 
   final semester = await semesterRepo.getActiveSemester();
@@ -81,7 +84,8 @@ class CourseFormNotifier extends StateNotifier<Course> {
     state = state.copyWith(startSection: start, endSection: e);
   }
 
-  void toggleWeek(int w) {
+  void toggleWeek(int w, {int maxWeek = 30}) {
+    if (w < 1 || w > maxWeek) return;
     final set = {...state.weeks};
     if (set.contains(w)) {
       set.remove(w);
@@ -106,7 +110,11 @@ class CourseFormNotifier extends StateNotifier<Course> {
     if (state.semesterId.isEmpty) return false;
     final toSave =
         state.copyWith(id: state.id.isEmpty ? const Uuid().v4() : state.id);
-    await _repo.upsert(toSave);
-    return true;
+    try {
+      await _repo.upsert(toSave);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 }

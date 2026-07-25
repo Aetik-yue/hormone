@@ -13,17 +13,16 @@ class JufeAdapter extends SchoolAdapter {
   String get schoolName => '江西财经大学';
 
   @override
-  String get loginUrl => 'http://xk.jxufe.cn/';
+  String get loginUrl => 'https://xk.jxufe.cn/';
 
   @override
   String get scheduleUrl =>
-      'http://xk.jxufe.cn/student/course/schedule';
+      'https://xk.jxufe.cn/student/course/schedule';
 
   @override
   bool isSchedulePage(String currentUrl) {
     return currentUrl.contains('/course/schedule') ||
-        currentUrl.contains('/xsjxgl/xskbcx') ||
-        currentUrl.contains('/student/course');
+        currentUrl.contains('/xsjxgl/xskbcx');
   }
 
   @override
@@ -151,6 +150,15 @@ class JufeAdapter extends SchoolAdapter {
   function parseWeeks(text) {
     if (!text) return [];
     var weeks = [];
+    // 支持单周/双周（奇数周/偶数周）
+    if (/单周/.test(text)) {
+      for (var i = 1; i <= 20; i += 2) weeks.push(i);
+      return weeks;
+    }
+    if (/双周/.test(text)) {
+      for (var i = 2; i <= 20; i += 2) weeks.push(i);
+      return weeks;
+    }
     var cleaned = text.replace(/第|周|节/g, '');
     var parts = cleaned.split(/[,，、\s]+/);
     parts.forEach(function(part) {

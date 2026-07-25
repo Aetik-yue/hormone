@@ -28,7 +28,9 @@ class Course {
     this.weeks = const [],
     this.colorValue = 0xFF5B8DEF,
     this.notes,
-  });
+  })  : assert(dayOfWeek >= 1 && dayOfWeek <= 7, 'dayOfWeek must be 1-7'),
+        assert(startSection >= 1, 'startSection must be >= 1'),
+        assert(endSection >= startSection, 'endSection must be >= startSection');
 
   Course copyWith({
     String? id,
@@ -60,4 +62,48 @@ class Course {
         colorValue: colorValue ?? this.colorValue,
         notes: notes ?? this.notes,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Course &&
+          id == other.id &&
+          semesterId == other.semesterId &&
+          name == other.name &&
+          teacher == other.teacher &&
+          location == other.location &&
+          dayOfWeek == other.dayOfWeek &&
+          startSection == other.startSection &&
+          endSection == other.endSection &&
+          startTime == other.startTime &&
+          endTime == other.endTime &&
+          _listEquals(weeks, other.weeks) &&
+          colorValue == other.colorValue &&
+          notes == other.notes;
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        semesterId,
+        name,
+        teacher,
+        location,
+        dayOfWeek,
+        startSection,
+        endSection,
+        startTime,
+        endTime,
+        Object.hashAll(weeks),
+        colorValue,
+        notes,
+      );
+}
+
+bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }

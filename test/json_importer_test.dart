@@ -21,13 +21,13 @@ void main() {
       ]
     });
 
-    final courses = JsonCourseImporter.parse(json, totalWeeks: 18);
+    final result = JsonCourseImporter.parse(json, totalWeeks: 18);
 
     test('解析出 1 门', () {
-      expect(courses, hasLength(1));
+      expect(result.courses, hasLength(1));
     });
     test('字段映射正确', () {
-      final c = courses.first;
+      final c = result.courses.first;
       expect(c.name, '高等数学');
       expect(c.teacher, '张三');
       expect(c.dayOfWeek, 2);
@@ -37,7 +37,7 @@ void main() {
     });
     test('颜色解析为 ARGB', () {
       // #5B8DEF -> 0xFF5B8DEF
-      expect(courses.first.colorValue, 0xFF5B8DEF);
+      expect(result.courses.first.colorValue, 0xFF5B8DEF);
     });
   });
 
@@ -49,8 +49,8 @@ void main() {
           {'name': '非法星期', 'dayOfWeek': 9, 'startSection': 1, 'endSection': 2},
         ]
       });
-      final courses = JsonCourseImporter.parse(json, totalWeeks: 18);
-      expect(courses, hasLength(1));
+      final result = JsonCourseImporter.parse(json, totalWeeks: 18);
+      expect(result.courses, hasLength(1));
     });
 
     test('缺少 name 被跳过', () {
@@ -59,8 +59,8 @@ void main() {
           {'dayOfWeek': 1, 'startSection': 1, 'endSection': 2},
         ]
       });
-      final courses = JsonCourseImporter.parse(json, totalWeeks: 18);
-      expect(courses, isEmpty);
+      final result = JsonCourseImporter.parse(json, totalWeeks: 18);
+      expect(result.courses, isEmpty);
     });
 
     test('超过总周数的周次被过滤', () {
@@ -75,8 +75,8 @@ void main() {
           }
         ]
       });
-      final courses = JsonCourseImporter.parse(json, totalWeeks: 18);
-      expect(courses.first.weeks, [1, 2]);
+      final result = JsonCourseImporter.parse(json, totalWeeks: 18);
+      expect(result.courses.first.weeks, [1, 2]);
     });
   });
 
@@ -85,9 +85,9 @@ void main() {
       final json = jsonEncode([
         {'name': 'A', 'dayOfWeek': 1, 'startSection': 1, 'endSection': 2}
       ]);
-      final courses = JsonCourseImporter.parse(json, totalWeeks: 18);
-      expect(courses, hasLength(1));
-      expect(courses.first.name, 'A');
+      final result = JsonCourseImporter.parse(json, totalWeeks: 18);
+      expect(result.courses, hasLength(1));
+      expect(result.courses.first.name, 'A');
     });
   });
 }

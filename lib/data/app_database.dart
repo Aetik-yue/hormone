@@ -27,38 +27,47 @@ class AppDatabase extends _$AppDatabase {
 
   /// 若不存在任何学期，写入一个默认激活学期（开学日取最近周一，18 周）。
   /// 设计为幂等：多次调用安全。
-  Future<void> seedDefaultSemester() {
-    return _seedFuture ??= _doSeed();
+  Future<void> seedDefaultSemester() async {
+    if (_seedFuture != null) return _seedFuture!;
+    _seedFuture = _doSeed();
+    try {
+      await _seedFuture;
+    } catch (_) {
+      _seedFuture = null;
+      rethrow;
+    }
   }
 
   Future<void> _doSeed() async {
-    final count = await (select(semesters)
-          ..where((s) => s.isActive.equals(true)))
-        .get();
-    if (count.isNotEmpty) return;
+    await transaction(() async {
+      final count = await (select(semesters)
+            ..where((s) => s.isActive.equals(true)))
+          .get();
+      if (count.isNotEmpty) return;
 
-    final anySemester = await select(semesters).get();
-    if (anySemester.isNotEmpty) return;
+      final anySemester = await select(semesters).get();
+      if (anySemester.isNotEmpty) return;
 
-    final now = DateTime.now();
-    // 最近一个周一（weekday==1 为周一）
-    final daysSinceMonday = (now.weekday - DateTime.monday) % 7;
-    final lastMonday = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(Duration(days: daysSinceMonday));
+      final now = DateTime.now();
+      // 最近一个周一（weekday==1 为周一）
+      final daysSinceMonday = (now.weekday - DateTime.monday) % 7;
+      final lastMonday = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(Duration(days: daysSinceMonday));
 
-    final semesterId = const Uuid().v4();
-    await into(semesters).insert(
-      SemestersCompanion.insert(
-        id: semesterId,
-        name: '我的学期',
-        startDate: lastMonday,
-        totalWeeks: 18,
-        isActive: const Value(true),
-      ),
-    );
+      final semesterId = const Uuid().v4();
+      await into(semesters).insert(
+        SemestersCompanion.insert(
+          id: semesterId,
+          name: '我的学期',
+          startDate: lastMonday,
+          totalWeeks: 18,
+          isActive: const Value(true),
+        ),
+      );
+    });
   }
 }
 

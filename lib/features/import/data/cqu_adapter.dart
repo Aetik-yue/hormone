@@ -19,9 +19,7 @@ class CquAdapter extends SchoolAdapter {
 
   @override
   bool isSchedulePage(String currentUrl) {
-    return currentUrl.contains('/workspace/curriculum') ||
-        currentUrl.contains('/course') ||
-        currentUrl.contains('/schedule');
+    return currentUrl.contains('/workspace/curriculum');
   }
 
   @override
@@ -58,11 +56,13 @@ class CquAdapter extends SchoolAdapter {
     var isChild = false;
     for (var j = 0; j < candidates.length; j++) {
       if (i !== j && candidates[j].contains(candidates[i]) && candidates[j] !== candidates[i]) {
-        // 如果父元素也匹配，优先用更小的（更具体的）元素
-        // 实际上我们想要最内层的匹配元素
+        isChild = true;
+        break;
       }
     }
-    filtered.push(candidates[i]);
+    if (!isChild) {
+      filtered.push(candidates[i]);
+    }
   }
 
   // 对每个候选元素解析课程信息
@@ -126,8 +126,8 @@ class CquAdapter extends SchoolAdapter {
     // 推断星期
     var day = findDay(el);
 
-    // 去重 key
-    var key = name + '|' + day + '|' + startSec + '|' + weeks.join(',');
+    // 去重 key（含教室，避免同名同学期同学时不同教室的课程被合并）
+    var key = name + '|' + day + '|' + startSec + '|' + (location || '') + '|' + weeks.join(',');
     if (seen[key]) return;
     seen[key] = true;
 
