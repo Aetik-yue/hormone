@@ -25,7 +25,7 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         children: [
           // ── 外观 ──
-          _SectionHeader('外观'),
+          const _SectionHeader('外观'),
           ListTile(
             leading: const Icon(Icons.palette_outlined),
             title: const Text('主题'),
@@ -45,7 +45,7 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(height: 1),
 
           // ── 学期 ──
-          _SectionHeader('学期'),
+          const _SectionHeader('学期'),
           ListTile(
             leading: const Icon(Icons.calendar_month_outlined),
             title: const Text('学期管理'),
@@ -56,7 +56,7 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(height: 1),
 
           // ── 节次时间 ──
-          _SectionHeader('节次时间'),
+          const _SectionHeader('节次时间'),
           ListTile(
             leading: const Icon(Icons.schedule_outlined),
             title: const Text('自定义节次时间'),
@@ -67,7 +67,7 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(height: 1),
 
           // ── 数据 ──
-          _SectionHeader('数据'),
+          const _SectionHeader('数据'),
           ListTile(
             leading: const Icon(Icons.school_outlined),
             title: const Text('从教务系统导入'),
