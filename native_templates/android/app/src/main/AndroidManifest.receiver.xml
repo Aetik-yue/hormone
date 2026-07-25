@@ -1,0 +1,19 @@
+<!--
+  把下面这段 <receiver> 合并进 android/app/src/main/AndroidManifest.xml 的
+  <application> 标签内（与已有的 <activity> 同级）。
+
+  注意 android:name=".CourseWidgetProvider" 中的前缀 "." 表示使用
+  AndroidManifest 中声明的 package；若你把 CourseWidgetProvider.kt 放到了
+  其他包名目录下，请写成完整类名，如
+  android:name="com.your.company.CourseWidgetProvider"。
+-->
+<receiver
+    android:name=".CourseWidgetProvider"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+    </intent-filter>
+    <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/course_widget_info" />
+</receiver>

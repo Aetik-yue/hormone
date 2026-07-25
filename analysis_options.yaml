@@ -1,0 +1,11 @@
+analyzer:
+  plugins:
+    - drift_dev
+  exclude:
+    - '**/*.g.dart'
+
+linter:
+  rules:
+    prefer_const_constructors: true
+    prefer_const_constructors_in_immutables: true
+    always_declare_return_types: true
