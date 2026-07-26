@@ -223,7 +223,7 @@ class CquAdapter extends SchoolAdapter {
   }
 
   function findDay(el) {
-    // 方法1：向上找 data-day / data-week / data-col 属性
+    // 方法1：向上找 data-day / data-week / data-col / data-weekday 属性
     var node = el;
     for (var d = 0; d < 12 && node; d++) {
       var attrs = ['data-day', 'data-week', 'data-col', 'data-weekday'];
@@ -239,39 +239,35 @@ class CquAdapter extends SchoolAdapter {
       node = node.parentElement;
     }
 
-    // 方法2：找同级前面的 "周X" 文本
-    node = el;
-    for (var d = 0; d < 8 && node; d++) {
-      var prev = node.previousElementSibling;
-      var count = 0;
-      while (prev && count < 20) {
-        var pt = (prev.textContent || '').trim();
-        if (pt.length < 15) {
-          var dm3 = pt.match(/周([一二三四五六日天])/) || pt.match(/星期([一二三四五六日天])/);
-          if (dm3 && dayMap[dm3[1]]) return dayMap[dm3[1]];
-        }
-        prev = prev.previousElementSibling;
-        count++;
-      }
-      node = node.parentElement;
-    }
-
-    // 方法3：通过列位置推断（找网格容器中第几列）
-    node = el;
-    for (var d = 0; d < 8 && node; d++) {
-      var parent = node.parentElement;
-      if (parent) {
-        var siblings = parent.children;
-        if (siblings.length >= 7 && siblings.length <= 8) {
-          for (var s = 0; s < siblings.length; s++) {
-            if (siblings[s] === node || siblings[s].contains(el)) {
-              var col = siblings.length === 8 ? s : s + 1; // 可能有节次列
-              if (col >= 1 && col <= 7) return col;
-            }
+    // 方法2：通过 getBoundingClientRect 匹配日期表头的 x 坐标
+    // 预扫描页面上所有"周X"表头叶子元素，记录中心 x 坐标
+    if (!window._dayHeaders) {
+      window._dayHeaders = [];
+      var headers = document.body.querySelectorAll('*');
+      for (var i = 0; i < headers.length; i++) {
+        var h = headers[i];
+        if (h.children.length > 0) continue; // 只看叶子节点
+        var t = (h.textContent || '').trim();
+        var dm = t.match(/^周([一二三四五六日天])$/) || t.match(/^星期([一二三四五六日天])$/);
+        if (dm && dayMap[dm[1]]) {
+          var rect = h.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            window._dayHeaders.push({ day: dayMap[dm[1]], x: rect.left + rect.width / 2 });
           }
         }
       }
-      node = parent;
+      window._dayHeaders.sort(function(a, b) { return a.x - b.x; });
+    }
+
+    if (window._dayHeaders.length >= 2) {
+      var rect = el.getBoundingClientRect();
+      var cardX = rect.left + rect.width / 2;
+      var bestDay = 0, bestDist = Infinity;
+      for (var i = 0; i < window._dayHeaders.length; i++) {
+        var dist = Math.abs(window._dayHeaders[i].x - cardX);
+        if (dist < bestDist) { bestDist = dist; bestDay = window._dayHeaders[i].day; }
+      }
+      if (bestDay > 0) return bestDay;
     }
 
     return 0; // 未知（无法从 DOM 推断星期）

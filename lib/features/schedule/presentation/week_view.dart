@@ -14,7 +14,7 @@ const double _sectionHeight = 56.0;
 /// 卡片与节格之间的留白。
 const double _cardInset = 4.0;
 /// 左侧时间轴宽度。
-const double _timeAxisWidth = 72.0;
+const double _timeAxisWidth = 48.0;
 
 /// 周视图课程表：左侧节次时间轴 + 右侧 7 天列，课程卡片按节次定位。
 /// 点击课程卡片弹出详情，长按进入编辑。
@@ -276,7 +276,7 @@ class _DayHeaderRow extends StatelessWidget {
   }
 }
 
-/// 左侧节次 + 该节起止时间范围（使用自定义时间表）。
+/// 左侧节次 + 该节起止时间（上下排列，使用自定义时间表）。
 class _TimeAxis extends StatelessWidget {
   final double totalHeight;
   final Map<int, SectionTime> sectionTimes;
@@ -296,14 +296,15 @@ class _TimeAxis extends StatelessWidget {
         children: List.generate(count, (i) {
           final section = i + 1;
           final sectionTime = sectionTimes[section];
-          final timeRange = sectionTime?.timeRange ?? '';
+          final startTime = sectionTime?.startTime ?? '';
+          final endTime = sectionTime?.endTime ?? '';
           return Positioned(
             top: i * _sectionHeight,
             left: 0,
             right: 0,
             height: _sectionHeight,
             child: Padding(
-              padding: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.only(right: 4),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -313,14 +314,21 @@ class _TimeAxis extends StatelessWidget {
                     style: theme.textTheme.labelSmall
                         ?.copyWith(color: theme.hintColor),
                   ),
-                  if (timeRange.isNotEmpty)
+                  if (startTime.isNotEmpty)
                     Text(
-                      timeRange,
+                      startTime,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.hintColor,
                         fontSize: 9,
                       ),
-                      textAlign: TextAlign.right,
+                    ),
+                  if (endTime.isNotEmpty)
+                    Text(
+                      endTime,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.hintColor,
+                        fontSize: 9,
+                      ),
                     ),
                 ],
               ),
