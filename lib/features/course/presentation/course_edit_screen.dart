@@ -412,7 +412,7 @@ class _SectionDropdown extends StatelessWidget {
             final s = i + 1;
             final sectionTime = sectionTimes[s];
             final display = sectionTime != null &&
-                    sectionTime.timeRange.isNotEmpty
+                    sectionTime.startTime.isNotEmpty
                 ? '第$s节 · ${sectionTime.timeRange}'
                 : '第$s节';
             return DropdownMenuItem(

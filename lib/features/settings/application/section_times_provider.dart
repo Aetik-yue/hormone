@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,8 +15,9 @@ class SectionTime {
   String get endTime {
     final parts = startTime.split(':');
     if (parts.length != 2) return '';
-    final h = int.tryParse(parts[0]) ?? 0;
-    final m = int.tryParse(parts[1]) ?? 0;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return '';
     final total = h * 60 + m + durationMinutes;
     return '${(total ~/ 60).toString().padLeft(2, '0')}:${(total % 60).toString().padLeft(2, '0')}';
   }
@@ -33,9 +35,10 @@ final sectionTimesProvider =
 
 class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
   static const _prefKey = 'custom_section_times_v2';
+  static const _oldPrefKey = 'custom_section_times';
 
   SectionTimesNotifier() : super(_defaultMap()) {
-    _load();
+    _init();
   }
 
   static Map<int, SectionTime> _defaultMap() => {
@@ -43,6 +46,26 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
           i: SectionTime(
               AppConstants.sectionStartTimes[i] ?? '', AppConstants.defaultSectionDuration),
       };
+
+  Future<void> _init() async {
+    await _migrateOldData();
+    await _load();
+  }
+
+  /// 迁移旧版数据（仅开始时间，无时长）到新版格式。
+  Future<void> _migrateOldData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final oldData = prefs.getStringList(_oldPrefKey);
+    if (oldData != null && oldData.length == AppConstants.maxSections) {
+      final map = <int, SectionTime>{};
+      for (var i = 0; i < oldData.length; i++) {
+        map[i + 1] = SectionTime(oldData[i], AppConstants.defaultSectionDuration);
+      }
+      state = map;
+      await _persist(map);
+      await prefs.remove(_oldPrefKey);
+    }
+  }
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -53,20 +76,23 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
         for (var i = 0; i < stored.length; i++) {
           final parts = stored[i].split(',');
           final start = parts[0];
-          final duration = parts.length == 2 ? int.tryParse(parts[1]) ?? AppConstants.defaultSectionDuration : AppConstants.defaultSectionDuration;
+          final duration = parts.length == 2
+              ? int.tryParse(parts[1]) ?? AppConstants.defaultSectionDuration
+              : AppConstants.defaultSectionDuration;
           map[i + 1] = SectionTime(start, duration);
         }
         state = map;
-      } catch (_) {
-        // 解析失败时使用默认值
+      } catch (e) {
+        // Parsing failed — keep default state
+        debugPrint('Failed to parse saved section times: $e');
       }
     }
   }
 
   /// 更新某一节的开始时间。
   Future<void> setSectionStart(int section, String time) async {
-    final current = state[section] ?? SectionTime(time, AppConstants.defaultSectionDuration);
     final updated = Map<int, SectionTime>.from(state);
+    final current = updated[section] ?? SectionTime(time, AppConstants.defaultSectionDuration);
     updated[section] = SectionTime(time, current.durationMinutes);
     state = updated;
     await _persist(updated);
@@ -74,8 +100,8 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
 
   /// 更新某一节的时长。
   Future<void> setSectionDuration(int section, int minutes) async {
-    final current = state[section] ?? SectionTime('', minutes);
     final updated = Map<int, SectionTime>.from(state);
+    final current = updated[section] ?? SectionTime('', minutes);
     updated[section] = SectionTime(current.startTime, minutes);
     state = updated;
     await _persist(updated);
