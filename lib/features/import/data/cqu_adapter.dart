@@ -274,7 +274,7 @@ class CquAdapter extends SchoolAdapter {
       node = parent;
     }
 
-    return 1; // 默认周一
+    return 0; // 未知（无法从 DOM 推断星期）
   }
 })();
 ''';

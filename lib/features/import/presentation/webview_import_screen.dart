@@ -29,6 +29,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   bool _extracting = false;
   List<ExtractedCourse> _courses = [];
   final Set<int> _selectedIndices = {};
+  int _skippedCount = 0;
 
   // ── 阶段：select → login → preview ──
   _Phase _phase = _Phase.select;
@@ -165,24 +166,39 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('共抓取 ${_courses.length} 门课程',
-                  style: Theme.of(context).textTheme.bodyMedium),
-              const Spacer(),
-              TextButton(
-                onPressed: () => setState(() {
-                  if (_selectedIndices.length == _courses.length) {
-                    _selectedIndices.clear();
-                  } else {
-                    _selectedIndices
-                        .addAll(List.generate(_courses.length, (i) => i));
-                  }
-                }),
-                child: Text(_selectedIndices.length == _courses.length
-                    ? '取消全选'
-                    : '全选'),
+              Row(
+                children: [
+                  Text('共抓取 ${_courses.length} 门课程',
+                      style: Theme.of(context).textTheme.bodyMedium),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      if (_selectedIndices.length == _courses.length) {
+                        _selectedIndices.clear();
+                      } else {
+                        _selectedIndices
+                            .addAll(List.generate(_courses.length, (i) => i));
+                      }
+                    }),
+                    child: Text(_selectedIndices.length == _courses.length
+                        ? '取消全选'
+                        : '全选'),
+                  ),
+                ],
               ),
+              if (_skippedCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '注意：有 $_skippedCount 门课程无法识别星期，已跳过',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -290,8 +306,11 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         decoded = jsonDecode(decoded);
       }
       final list = decoded as List<dynamic>;
-      final courses =
+      final allExtracted =
           list.map((e) => ExtractedCourse.fromJson(e as Map<String, dynamic>)).toList();
+      // 过滤掉无法识别星期的课程（dayOfWeek=0 表示 findDay 未能推断）
+      final courses = allExtracted.where((c) => c.dayOfWeek >= 1 && c.dayOfWeek <= 7).toList();
+      final skippedCount = allExtracted.length - courses.length;
 
       if (courses.isEmpty) {
         // 抓取为空，捕获调试信息
@@ -349,6 +368,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
       setState(() {
         _courses = courses;
+        _skippedCount = skippedCount;
         _selectedIndices.clear();
         _selectedIndices.addAll(List.generate(courses.length, (i) => i));
         _phase = _Phase.preview;

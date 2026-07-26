@@ -61,7 +61,7 @@ class ExtractedCourse {
   });
 
   factory ExtractedCourse.fromJson(Map<String, dynamic> json) {
-    final dayOfWeek = json['dayOfWeek'] as int? ?? 1;
+    final dayOfWeek = json['dayOfWeek'] as int? ?? 0;
     final startSection = json['startSection'] as int? ?? 1;
     final endSection = json['endSection'] as int? ?? 1;
     assert(dayOfWeek >= 1 && dayOfWeek <= 7,
