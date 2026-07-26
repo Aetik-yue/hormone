@@ -137,6 +137,9 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
+/// 可选的课时时长（分钟）。
+const _durationOptions = [30, 35, 40, 45, 50, 60, 90, 120];
+
 /// 节次时间编辑器（Bottom Sheet）。
 class _SectionTimeEditor extends ConsumerStatefulWidget {
   const _SectionTimeEditor();
@@ -182,25 +185,62 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
                 itemCount: AppConstants.maxSections,
                 itemBuilder: (context, i) {
                   final section = i + 1;
-                  final time = times[section] ?? '';
-                  return ListTile(
-                    title: Text('第 $section 节'),
-                    trailing: InkWell(
-                      onTap: () => _pickTime(context, section, time),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
+                  final sectionTime = times[section];
+                  final startTime = sectionTime?.startTime ?? '';
+                  final duration = sectionTime?.durationMinutes ??
+                      AppConstants.defaultSectionDuration;
+                  final endTime = sectionTime?.endTime ?? '';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 4),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 56,
+                          child: Text('第 $section 节',
+                              style: theme.textTheme.bodyMedium),
                         ),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: theme.dividerColor),
-                          borderRadius: BorderRadius.circular(8),
+                        InkWell(
+                          onTap: () => _pickTime(context, section, startTime),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: theme.dividerColor),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              startTime.isNotEmpty ? startTime : '未设置',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
                         ),
-                        child: Text(
-                          time.isNotEmpty ? time : '未设置',
-                          style: theme.textTheme.bodyMedium,
+                        const SizedBox(width: 8),
+                        DropdownButton<int>(
+                          value: duration,
+                          items: _durationOptions
+                              .map((d) => DropdownMenuItem(
+                                    value: d,
+                                    child: Text('$d 分'),
+                                  ))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) {
+                              ref
+                                  .read(sectionTimesProvider.notifier)
+                                  .setSectionDuration(section, v);
+                            }
+                          },
                         ),
-                      ),
+                        const Spacer(),
+                        Text(
+                          endTime.isNotEmpty ? '→ $endTime' : '',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: theme.hintColor),
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -235,7 +275,9 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
     if (picked != null) {
       final timeStr =
           '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-      ref.read(sectionTimesProvider.notifier).setSectionTime(section, timeStr);
+      ref
+          .read(sectionTimesProvider.notifier)
+          .setSectionStart(section, timeStr);
     }
   }
 }

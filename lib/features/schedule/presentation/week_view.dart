@@ -14,7 +14,7 @@ const double _sectionHeight = 56.0;
 /// 卡片与节格之间的留白。
 const double _cardInset = 4.0;
 /// 左侧时间轴宽度。
-const double _timeAxisWidth = 46.0;
+const double _timeAxisWidth = 72.0;
 
 /// 周视图课程表：左侧节次时间轴 + 右侧 7 天列，课程卡片按节次定位。
 /// 点击课程卡片弹出详情，长按进入编辑。
@@ -276,10 +276,10 @@ class _DayHeaderRow extends StatelessWidget {
   }
 }
 
-/// 左侧节次 + 该节开始时间（使用自定义时间表）。
+/// 左侧节次 + 该节起止时间范围（使用自定义时间表）。
 class _TimeAxis extends StatelessWidget {
   final double totalHeight;
-  final Map<int, String> sectionTimes;
+  final Map<int, SectionTime> sectionTimes;
   const _TimeAxis({
     required this.totalHeight,
     required this.sectionTimes,
@@ -295,7 +295,8 @@ class _TimeAxis extends StatelessWidget {
       child: Stack(
         children: List.generate(count, (i) {
           final section = i + 1;
-          final time = sectionTimes[section] ?? '';
+          final sectionTime = sectionTimes[section];
+          final timeRange = sectionTime?.timeRange ?? '';
           return Positioned(
             top: i * _sectionHeight,
             left: 0,
@@ -312,13 +313,14 @@ class _TimeAxis extends StatelessWidget {
                     style: theme.textTheme.labelSmall
                         ?.copyWith(color: theme.hintColor),
                   ),
-                  if (time.isNotEmpty)
+                  if (timeRange.isNotEmpty)
                     Text(
-                      time,
+                      timeRange,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.hintColor,
-                        fontSize: 10,
+                        fontSize: 9,
                       ),
+                      textAlign: TextAlign.right,
                     ),
                 ],
               ),

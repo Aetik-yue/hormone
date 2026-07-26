@@ -384,7 +384,7 @@ class _FieldLabel extends StatelessWidget {
 class _SectionDropdown extends StatelessWidget {
   final String label;
   final int value;
-  final Map<int, String> sectionTimes;
+  final Map<int, SectionTime> sectionTimes;
   final void Function(int?) onChanged;
 
   const _SectionDropdown({
@@ -410,10 +410,14 @@ class _SectionDropdown extends StatelessWidget {
           isExpanded: true,
           items: List.generate(maxSections, (i) {
             final s = i + 1;
-            final t = sectionTimes[s] ?? '';
+            final sectionTime = sectionTimes[s];
+            final display = sectionTime != null &&
+                    sectionTime.timeRange.isNotEmpty
+                ? '第$s节 · ${sectionTime.timeRange}'
+                : '第$s节';
             return DropdownMenuItem(
               value: s,
-              child: Text(t.isNotEmpty ? '第$s节 · $t' : '第$s节'),
+              child: Text(display),
             );
           }),
           onChanged: onChanged,

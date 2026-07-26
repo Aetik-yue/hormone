@@ -19,4 +19,7 @@ class AppConstants {
   };
 
   static const int maxSections = 12;
+
+  /// 默认每节课时长（分钟）。
+  static const int defaultSectionDuration = 45;
 }
