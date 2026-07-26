@@ -27,6 +27,7 @@ class CquAdapter extends SchoolAdapter {
 (function() {
   var results = [];
   var dayMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7};
+  var _dayHeaders = null; // 日期表头缓存（闭包变量，每次提取刷新）
 
   // ═══ 策略1：找所有包含课程编号+周次信息的元素 ═══
   // 课程卡片文本特征：包含 [数字-数字] 和 X周 和 X节
@@ -240,32 +241,47 @@ class CquAdapter extends SchoolAdapter {
     }
 
     // 方法2：通过 getBoundingClientRect 匹配日期表头的 x 坐标
-    // 预扫描页面上所有"周X"表头叶子元素，记录中心 x 坐标
-    if (!window._dayHeaders) {
-      window._dayHeaders = [];
-      var headers = document.body.querySelectorAll('*');
-      for (var i = 0; i < headers.length; i++) {
-        var h = headers[i];
-        if (h.children.length > 0) continue; // 只看叶子节点
+    // 预扫描页面上所有"周X"/"星期X"表头元素，记录中心 x 坐标
+    if (!_dayHeaders) {
+      _dayHeaders = [];
+      // 优先检查常见表头元素，避免全量扫描
+      var headerEls = document.querySelectorAll(
+        'th, [class*="week"], [class*="day"], [class*="header"], [class*="head"]'
+      );
+      if (headerEls.length === 0) {
+        headerEls = document.body.querySelectorAll('*');
+      }
+      for (var i = 0; i < headerEls.length; i++) {
+        var h = headerEls[i];
         var t = (h.textContent || '').trim();
         var dm = t.match(/^周([一二三四五六日天])$/) || t.match(/^星期([一二三四五六日天])$/);
         if (dm && dayMap[dm[1]]) {
           var rect = h.getBoundingClientRect();
           if (rect.width > 0 && rect.height > 0) {
-            window._dayHeaders.push({ day: dayMap[dm[1]], x: rect.left + rect.width / 2 });
+            var x = rect.left + rect.width / 2;
+            // 去重：避免父子元素都匹配时重复记录同一位置
+            var isDup = false;
+            for (var j = 0; j < _dayHeaders.length; j++) {
+              if (Math.abs(_dayHeaders[j].x - x) < 2) { isDup = true; break; }
+            }
+            if (!isDup) {
+              _dayHeaders.push({ day: dayMap[dm[1]], x: x });
+            }
           }
         }
       }
-      window._dayHeaders.sort(function(a, b) { return a.x - b.x; });
+      _dayHeaders.sort(function(a, b) { return a.x - b.x; });
     }
 
-    if (window._dayHeaders.length >= 2) {
+    if (_dayHeaders.length >= 1) {
       var rect = el.getBoundingClientRect();
+      // 隐藏元素（display:none 等）返回全零 DOMRect，无法定位
+      if (rect.width === 0 || rect.height === 0) return 0;
       var cardX = rect.left + rect.width / 2;
       var bestDay = 0, bestDist = Infinity;
-      for (var i = 0; i < window._dayHeaders.length; i++) {
-        var dist = Math.abs(window._dayHeaders[i].x - cardX);
-        if (dist < bestDist) { bestDist = dist; bestDay = window._dayHeaders[i].day; }
+      for (var i = 0; i < _dayHeaders.length; i++) {
+        var dist = Math.abs(_dayHeaders[i].x - cardX);
+        if (dist < bestDist) { bestDist = dist; bestDay = _dayHeaders[i].day; }
       }
       if (bestDay > 0) return bestDay;
     }
