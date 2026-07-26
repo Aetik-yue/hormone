@@ -45,7 +45,7 @@ class ExtractedCourse {
   final String name;
   final String? teacher;
   final String? location;
-  final int dayOfWeek; // 1-7
+  final int dayOfWeek; // 1-7, 0=未知（无法推断）
   final int startSection;
   final int endSection;
   final List<int> weeks;
@@ -64,7 +64,7 @@ class ExtractedCourse {
     final dayOfWeek = json['dayOfWeek'] as int? ?? 0;
     final startSection = json['startSection'] as int? ?? 1;
     final endSection = json['endSection'] as int? ?? 1;
-    assert(dayOfWeek >= 1 && dayOfWeek <= 7,
+    assert(dayOfWeek >= 0 && dayOfWeek <= 7,
         'dayOfWeek out of range: $dayOfWeek');
     assert(startSection >= 1 && startSection <= 20,
         'startSection out of range: $startSection');
