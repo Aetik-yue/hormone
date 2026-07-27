@@ -45,9 +45,9 @@ class CquAdapter extends SchoolAdapter {
     if (!/\d+.*周/.test(t)) continue;
     // 必须包含节次信息
     if (!/\d+.*节/.test(t)) continue;
-    // 排除包含多个课程编号的父容器
+    // 排除包含多个课程编号的父容器（保留最内层匹配元素）
     var codeMatches = t.match(/\[\d{4,}-\d{2,}[^\]]*\]/g);
-    if (codeMatches && codeMatches.length > 2) continue;
+    if (codeMatches && codeMatches.length > 1) continue;
     candidates.push(el);
   }
 
@@ -76,8 +76,8 @@ class CquAdapter extends SchoolAdapter {
     if (!codeMatch) return;
     var code = codeMatch[1];
 
-    // 解析周次：支持 [1-7周], [1-3,5-14周], [5,7-9,11-15周] 等
-    var weekMatch = text.match(/\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*周\]/);
+    // 解析周次：支持 [1-7周], [1-3,5-14周], [5、7-9、11-15周] 等
+    var weekMatch = text.match(/\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，、]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*周\]/);
     var weeks = [];
     if (weekMatch) {
       weeks = parseRange(weekMatch[1]);

@@ -97,8 +97,13 @@ class JsonCourseImporter {
           .cast<int>()
           .where((w) => w >= 1 && (totalWeeks == null || w <= totalWeeks))
           .toList();
+      if (weeks.isEmpty) {
+        skipped.add('第${index + 1}条：周次为空');
+        return null;
+      }
     } else {
-      weeks = const [];
+      skipped.add('第${index + 1}条：缺少周次');
+      return null;
     }
 
     final colorValue = _parseColor(m['color']?.toString());

@@ -45,8 +45,8 @@ void main() {
     test('非法 dayOfWeek 被跳过并计入 skipped', () {
       final json = jsonEncode({
         'courses': [
-          {'name': '有效', 'dayOfWeek': 1, 'startSection': 1, 'endSection': 2},
-          {'name': '非法星期', 'dayOfWeek': 9, 'startSection': 1, 'endSection': 2},
+          {'name': '有效', 'dayOfWeek': 1, 'startSection': 1, 'endSection': 2, 'weeks': [1, 2, 3]},
+          {'name': '非法星期', 'dayOfWeek': 9, 'startSection': 1, 'endSection': 2, 'weeks': [1, 2, 3]},
         ]
       });
       final result = JsonCourseImporter.parse(json, totalWeeks: 18);
@@ -56,7 +56,7 @@ void main() {
     test('缺少 name 被跳过', () {
       final json = jsonEncode({
         'courses': [
-          {'dayOfWeek': 1, 'startSection': 1, 'endSection': 2},
+          {'dayOfWeek': 1, 'startSection': 1, 'endSection': 2, 'weeks': [1, 2, 3]},
         ]
       });
       final result = JsonCourseImporter.parse(json, totalWeeks: 18);
@@ -83,7 +83,7 @@ void main() {
   group('JsonCourseImporter - 顶层为数组', () {
     test('直接数组也可解析', () {
       final json = jsonEncode([
-        {'name': 'A', 'dayOfWeek': 1, 'startSection': 1, 'endSection': 2}
+        {'name': 'A', 'dayOfWeek': 1, 'startSection': 1, 'endSection': 2, 'weeks': [1, 2, 3]}
       ]);
       final result = JsonCourseImporter.parse(json, totalWeeks: 18);
       expect(result.courses, hasLength(1));

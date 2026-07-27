@@ -44,7 +44,14 @@ class SemesterRepository {
   }
 
   /// 设为唯一激活学期（其余置为非激活）。
+  /// 若 id 不存在，抛出 StateError 以避免零激活状态。
   Future<void> setActive(String id) async {
+    final exists = await (_db.select(_db.semesters)
+          ..where((s) => s.id.equals(id)))
+        .getSingleOrNull();
+    if (exists == null) {
+      throw StateError('Semester not found: $id');
+    }
     await _db.batch((batch) {
       batch.update(
         _db.semesters,

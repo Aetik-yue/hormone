@@ -60,6 +60,7 @@ class IcsCourseParser {
         until: until,
         semesterStart: semesterStart,
         totalWeeks: totalWeeks,
+        firstOccurrence: start,
       );
       if (weeks.isEmpty) continue;
 
@@ -118,6 +119,7 @@ class IcsCourseParser {
     DateTime? until,
     required DateTime semesterStart,
     required int totalWeeks,
+    required DateTime firstOccurrence,
   }) {
     final weeks = <int>[];
     var w = firstWeek;
@@ -127,9 +129,10 @@ class IcsCourseParser {
       k++;
       if (count != null && k >= count) break;
       if (until != null) {
-        // Compute the actual course date for the next occurrence.
+        // Compute the actual course date for the next occurrence,
+        // using the first occurrence as base (not semesterStart).
         final nextDate =
-            semesterStart.add(Duration(days: k * interval * 7));
+            firstOccurrence.add(Duration(days: k * interval * 7));
         if (nextDate.isAfter(until)) break;
       }
       w += interval;
@@ -224,7 +227,7 @@ class IcsCourseParser {
     return m
         .group(1)!
         .split(',')
-        .map((d) => _weekdayMap[d.trim().toUpperCase()])
+        .map((d) => _weekdayMap[d.trim().toUpperCase().replaceFirst(RegExp(r'^[+-]?\d+'), '')])
         .where((d) => d != null)
         .cast<int>()
         .toList();

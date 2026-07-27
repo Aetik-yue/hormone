@@ -45,7 +45,7 @@ class WeekView extends ConsumerWidget {
                   .toList();
 
               if (weekCourses.isEmpty) {
-                return const _EmptyWeekHint();
+                return _EmptyWeekHint(hasAnyCourses: allCourses.isNotEmpty);
               }
 
               final byDay = <int, List<Course>>{
@@ -461,9 +461,10 @@ class _CourseCard extends StatelessWidget {
   }
 }
 
-/// 本周无课程的友好空状态。
+/// 无课程时的友好空状态。区分"无任何课程"和"本周无课"。
 class _EmptyWeekHint extends StatelessWidget {
-  const _EmptyWeekHint();
+  final bool hasAnyCourses;
+  const _EmptyWeekHint({required this.hasAnyCourses});
 
   @override
   Widget build(BuildContext context) {
@@ -476,13 +477,15 @@ class _EmptyWeekHint extends StatelessWidget {
               size: 56, color: theme.hintColor),
           const SizedBox(height: 12),
           Text(
-            '尚未导入课程',
+            hasAnyCourses ? '本周暂无课程' : '尚未导入课程',
             style: theme.textTheme.titleMedium
                 ?.copyWith(color: theme.hintColor),
           ),
           const SizedBox(height: 4),
           Text(
-            '从「设置 → 从教务系统导入」一键抓取，\n或点右下角 + 手动添加',
+            hasAnyCourses
+                ? '当前周次没有安排课程\n试试切换到其他周次'
+                : '从「设置 → 从教务系统导入」一键抓取，\n或点右下角 + 手动添加',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.hintColor),
             textAlign: TextAlign.center,

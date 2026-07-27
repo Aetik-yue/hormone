@@ -289,6 +289,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
   Future<void> _tryExtract() async {
     if (_adapter == null || _controller == null) return;
+    if (_extracting) return; // 防止 onPageFinished 与手动点击并发
     setState(() => _extracting = true);
 
     try {
@@ -397,7 +398,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     var count = 0;
     for (final i in _selectedIndices) {
       final ec = _courses[i];
-      if (ec.name.isEmpty) continue;
+      if (ec.name.isEmpty || ec.weeks.isEmpty) continue;
       final course = Course(
         id: const Uuid().v4(),
         semesterId: semester.id,

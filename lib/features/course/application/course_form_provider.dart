@@ -84,7 +84,7 @@ class CourseFormNotifier extends StateNotifier<Course> {
     state = state.copyWith(startSection: start, endSection: e);
   }
 
-  void toggleWeek(int w, {int maxWeek = 30}) {
+  void toggleWeek(int w, {int maxWeek = 40}) {
     if (w < 1 || w > maxWeek) return;
     final set = {...state.weeks};
     if (set.contains(w)) {
@@ -105,16 +105,13 @@ class CourseFormNotifier extends StateNotifier<Course> {
   void setNotes(String v) =>
       state = state.copyWith(notes: v.isEmpty ? null : v);
 
-  /// 保存：新增时生成 id，编辑时沿用。返回是否成功。
+  /// 保存：新增时生成 id，编辑时沿用。
+  /// 无学期时返回 false；DB 错误时抛出异常由 UI 捕获。
   Future<bool> save() async {
     if (state.semesterId.isEmpty) return false;
     final toSave =
         state.copyWith(id: state.id.isEmpty ? const Uuid().v4() : state.id);
-    try {
-      await _repo.upsert(toSave);
-      return true;
-    } catch (e) {
-      return false;
-    }
+    await _repo.upsert(toSave);
+    return true;
   }
 }

@@ -62,14 +62,15 @@ class ExtractedCourse {
 
   factory ExtractedCourse.fromJson(Map<String, dynamic> json) {
     final dayOfWeek = json['dayOfWeek'] as int? ?? 0;
-    final startSection = json['startSection'] as int? ?? 1;
-    final endSection = json['endSection'] as int? ?? 1;
+    final rawStart = json['startSection'] as int? ?? 1;
+    final rawEnd = json['endSection'] as int? ?? 1;
     assert(dayOfWeek >= 0 && dayOfWeek <= 7,
         'dayOfWeek out of range: $dayOfWeek');
-    assert(startSection >= 1 && startSection <= 20,
-        'startSection out of range: $startSection');
-    assert(endSection >= startSection,
-        'endSection ($endSection) < startSection ($startSection)');
+    assert(rawStart >= 1 && rawStart <= 20,
+        'startSection out of range: $rawStart');
+    // 确保 startSection <= endSection（release 模式也生效）
+    final startSection = rawStart <= rawEnd ? rawStart : rawEnd;
+    final endSection = rawStart <= rawEnd ? rawEnd : rawStart;
     return ExtractedCourse(
       name: json['name'] as String? ?? '',
       teacher: json['teacher'] as String?,
@@ -77,10 +78,12 @@ class ExtractedCourse {
       dayOfWeek: dayOfWeek,
       startSection: startSection,
       endSection: endSection,
-      weeks: (json['weeks'] as List<dynamic>?)
-              ?.map((e) => e as int)
-              .toList() ??
-          [],
+      weeks: json['weeks'] is List
+              ? (json['weeks'] as List)
+                  .map((e) => e is int ? e : (e is num ? e.toInt() : null))
+                  .whereType<int>()
+                  .toList()
+              : const [],
     );
   }
 }
