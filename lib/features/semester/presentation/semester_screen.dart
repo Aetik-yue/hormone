@@ -273,18 +273,27 @@ class _SemesterEditSheetState extends ConsumerState<SemesterEditSheet> {
                             .read(semesterFormProvider.notifier)
                             .setCurrentWeekOverride(null);
                       } else {
+                        // 默认使用计算出的当前周，而非最后一周
+                        final computedWeek = computeCurrentWeek(
+                            semester.startDate, DateTime.now());
+                        final defaultWeek = computedWeek < 1
+                            ? 1
+                            : (computedWeek > semester.totalWeeks
+                                ? semester.totalWeeks
+                                : computedWeek);
                         ref
                             .read(semesterFormProvider.notifier)
                             .setCurrentWeekOverride(
-                                semester.currentWeekOverride ??
-                                    semester.totalWeeks);
+                                semester.currentWeekOverride ?? defaultWeek);
                       }
                     }),
                   ),
                   if (_overrideOn)
                     _Stepper(
                       value: semester.currentWeekOverride ??
-                          semester.totalWeeks,
+                          computeCurrentWeek(
+                              semester.startDate, DateTime.now())
+                              .clamp(1, semester.totalWeeks),
                       min: 1,
                       max: semester.totalWeeks,
                       onChanged: (v) => ref

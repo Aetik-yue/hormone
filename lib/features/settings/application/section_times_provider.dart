@@ -27,6 +27,49 @@ class SectionTime {
   String get timeRange => '$startTime-$endTime';
 }
 
+/// 节次时间预设模板。
+class SectionTimeTemplate {
+  final String name;
+  final int duration;
+  final Map<int, String> startTimes;
+
+  const SectionTimeTemplate({
+    required this.name,
+    required this.duration,
+    required this.startTimes,
+  });
+}
+
+/// 常用节次时间模板。
+const List<SectionTimeTemplate> sectionTimeTemplates = [
+  SectionTimeTemplate(
+    name: '标准 45 分钟制',
+    duration: 45,
+    startTimes: {
+      1: '08:00', 2: '08:55', 3: '10:00', 4: '10:55',
+      5: '14:00', 6: '14:55', 7: '16:00', 8: '16:55',
+      9: '19:00', 10: '19:55', 11: '20:50', 12: '21:45',
+    },
+  ),
+  SectionTimeTemplate(
+    name: '90 分钟大节课制',
+    duration: 90,
+    startTimes: {
+      1: '08:00', 2: '09:45', 3: '14:00', 4: '15:45',
+      5: '19:00', 6: '20:45',
+    },
+  ),
+  SectionTimeTemplate(
+    name: '50 分钟制',
+    duration: 50,
+    startTimes: {
+      1: '08:00', 2: '08:55', 3: '10:00', 4: '10:55',
+      5: '14:00', 6: '14:55', 7: '16:00', 8: '16:55',
+      9: '19:00', 10: '19:55',
+    },
+  ),
+];
+
 /// 节次时间自定义 Provider。
 /// 持久化到 SharedPreferences，未自定义时使用默认值。
 final sectionTimesProvider =
@@ -112,6 +155,21 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
   Future<void> setAllTimes(Map<int, SectionTime> times) async {
     state = times;
     await _persist(times);
+  }
+
+  /// 应用预设模板。
+  Future<void> applyTemplate(SectionTimeTemplate template) async {
+    final map = <int, SectionTime>{};
+    for (var i = 1; i <= AppConstants.maxSections; i++) {
+      final start = template.startTimes[i];
+      if (start != null) {
+        map[i] = SectionTime(start, template.duration);
+      } else {
+        map[i] = SectionTime('', template.duration);
+      }
+    }
+    state = map;
+    await _persist(map);
   }
 
   /// 恢复默认时间表。

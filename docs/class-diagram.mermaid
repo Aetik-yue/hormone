@@ -1,0 +1,82 @@
+classDiagram
+    %% 仅展示本次增量涉及的类型与关系；未列出的既有类型保持不变
+
+    class SelectedWeekNotifier {
+        +goTo(int week)
+        +nextWeek(int totalWeeks)
+        +prevWeek()
+        «StateNotifier~int~»
+    }
+
+    class WeekView {
+        <<ConsumerStatefulWidget>>
+        +int totalWeeks
+    }
+
+    class _WeekViewState {
+        -PageController _pc
+        -bool _isProgrammaticJump
+        +initState()
+        +_onPageChanged(int index)
+        +_syncWeek(int week, bool animate)
+    }
+
+    class _WeekColumns {
+        <<StatelessWidget>>
+        +int week
+        +Map~int,List~Course~~ coursesByDay
+        +double totalHeight
+        +Map~int,SectionTime~ sectionTimes
+        +int todayWeekday
+    }
+
+    class _DayColumn {
+        +int day
+        +bool isToday
+        +List~Course~ courses
+    }
+
+    class _CourseCard {
+        +Course course
+    }
+
+    class _TimeAxis {
+        +double totalHeight
+        +Map~int,SectionTime~ sectionTimes
+    }
+
+    class _DayHeaderRow {
+        +int todayWeekday
+    }
+
+    class _EmptyWeekHint {
+        +bool hasAnyCourses
+    }
+
+    class ScheduleScreen {
+        <<ConsumerWidget>>
+    }
+
+    class ImportMenuButton {
+        <<StatelessWidget>>
+        +onSelected(_ImportTarget target)
+    }
+
+    class _ImportTarget {
+        <<enum>>
+        webview
+        file
+        manual
+    }
+
+    SelectedWeekNotifier <.. _WeekViewState : listen / goTo
+    WeekView *-- _WeekViewState : creates
+    WeekView o-- _TimeAxis : 固定左侧
+    WeekView o-- _WeekColumns : PageView 每页承载
+    _WeekColumns o-- _DayColumn : 7 列
+    _DayColumn o-- _CourseCard : 定位课程卡
+    WeekView o-- _DayHeaderRow : 顶部表头
+    _WeekColumns ..> _EmptyWeekHint : 空周叠加
+    ScheduleScreen o-- ImportMenuButton : AppBar actions
+    ImportMenuButton --> _ImportTarget : 菜单项
+    ImportMenuButton ..> SelectedWeekNotifier : (仅消费既有路由, 不改)

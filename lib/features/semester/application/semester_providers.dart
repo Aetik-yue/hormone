@@ -11,9 +11,19 @@ final activeSemesterProvider = FutureProvider<Semester?>((ref) async {
 });
 
 /// 全部学期列表（学期管理页使用）。
+/// 激活学期置顶，其余按开学日期倒序排列。
 final semestersProvider = FutureProvider<List<Semester>>((ref) async {
   final repo = ref.watch(semesterRepositoryProvider);
-  return repo.getSemesters();
+  final semesters = await repo.getSemesters();
+  final active = ref.watch(activeSemesterProvider).value;
+  semesters.sort((a, b) {
+    // 激活学期置顶
+    if (a.id == active?.id) return -1;
+    if (b.id == active?.id) return 1;
+    // 其余按开学日期倒序（最新的在上面）
+    return b.startDate.compareTo(a.startDate);
+  });
+  return semesters;
 });
 
 /// 激活学期下的全部课程流（课程表主视图使用）。

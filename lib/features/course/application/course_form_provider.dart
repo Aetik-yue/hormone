@@ -13,6 +13,16 @@ final courseInitialProvider =
   final courseRepo = ref.watch(courseRepositoryProvider);
   final semesterRepo = ref.watch(semesterRepositoryProvider);
 
+  // 处理复制课程：copy:<courseId>
+  if (courseId != null && courseId.startsWith('copy:')) {
+    final originalId = courseId.substring(5);
+    final original = await courseRepo.getCourse(originalId);
+    if (original != null) {
+      return original.copyWith(id: '', name: '${original.name}（副本）');
+    }
+    throw StateError('课程不存在：$originalId');
+  }
+
   if (courseId != null && courseId.isNotEmpty) {
     final existing = await courseRepo.getCourse(courseId);
     if (existing != null) return existing;
@@ -100,15 +110,45 @@ class CourseFormNotifier extends StateNotifier<Course> {
 
   void clearWeeks() => state = state.copyWith(weeks: const []);
 
+  /// 选择单周（奇数周）。
+  void setOddWeeks(int maxWeek) {
+    final odd = [for (var i = 1; i <= maxWeek; i += 2) i];
+    state = state.copyWith(weeks: odd);
+  }
+
+  /// 选择双周（偶数周）。
+  void setEvenWeeks(int maxWeek) {
+    final even = [for (var i = 2; i <= maxWeek; i += 2) i];
+    state = state.copyWith(weeks: even);
+  }
+
+  /// 选择指定范围。
+  void setWeekRange(int start, int end) {
+    final weeks = [for (var i = start; i <= end; i++) i];
+    state = state.copyWith(weeks: weeks);
+  }
+
+  /// 反选周次。
+  void invertWeeks(int maxWeek) {
+    final current = {...state.weeks};
+    final inverted = <int>[];
+    for (var i = 1; i <= maxWeek; i++) {
+      if (!current.contains(i)) inverted.add(i);
+    }
+    state = state.copyWith(weeks: inverted);
+  }
+
   void setColor(int v) => state = state.copyWith(colorValue: v);
 
   void setNotes(String v) =>
       state = state.copyWith(notes: v.isEmpty ? null : v);
 
   /// 保存：新增时生成 id，编辑时沿用。
-  /// 无学期时返回 false；DB 错误时抛出异常由 UI 捕获。
-  Future<bool> save() async {
+  /// 无学期时返回 false；无周次时返回 null（课程不会显示）；
+  /// DB 错误时抛出异常由 UI 捕获。
+  Future<bool?> save() async {
     if (state.semesterId.isEmpty) return false;
+    if (state.weeks.isEmpty) return null;
     final toSave =
         state.copyWith(id: state.id.isEmpty ? const Uuid().v4() : state.id);
     await _repo.upsert(toSave);

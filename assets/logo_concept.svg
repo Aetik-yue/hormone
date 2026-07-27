@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  hormone logo 概念稿（SVG 预览） - Phase 9 redesign
+  设计语义：从「课程表卡片」重构为「化学分子几何构型」—— 中心原子 + 4 配体的
+  四面体 CH4 风格球棍模型（ball-and-stick），主色 PRIMARY = #5B8DEF。
+  该稿为最终主视觉。最终 PNG 由 tools/generate_assets.py（仅标准库，解析 AA）落地为
+  1024² icon.png / 各平台图标。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="48%" r="68%">
+      <stop offset="0%" stop-color="#769FF2"/>
+      <stop offset="100%" stop-color="#3E6CD6"/>
+    </radialGradient>
+    <radialGradient id="sphere" cx="34%" cy="30%" r="62%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="55%" stop-color="#E6EEFF"/>
+      <stop offset="100%" stop-color="#9DC0FF"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 圆角蓝底 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="url(#bgGrad)"/>
+
+  <!-- 分子键（白色圆头线，先于原子绘制） -->
+  <g stroke="#FFFFFF" stroke-width="48" stroke-linecap="round" fill="none">
+    <line x1="512" y1="512" x2="512" y2="164"/>   <!-- 中 → 上 -->
+    <line x1="512" y1="512" x2="225" y2="614"/>   <!-- 中 → 左下 -->
+    <line x1="512" y1="512" x2="799" y2="614"/>   <!-- 中 → 右下 -->
+    <line x1="512" y1="512" x2="512" y2="880"/>   <!-- 中 → 下 -->
+  </g>
+
+  <!-- 原子（带高光的球面感） -->
+  <!-- 中心原子（最大） -->
+  <circle cx="512" cy="512" r="108" fill="url(#sphere)"/>
+  <!-- 4 个配体原子 -->
+  <circle cx="512" cy="164" r="74" fill="url(#sphere)"/>
+  <circle cx="225" cy="614" r="74" fill="url(#sphere)"/>
+  <circle cx="799" cy="614" r="74" fill="url(#sphere)"/>
+  <circle cx="512" cy="880" r="74" fill="url(#sphere)"/>
+</svg>

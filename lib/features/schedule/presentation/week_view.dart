@@ -45,7 +45,10 @@ class WeekView extends ConsumerWidget {
                   .toList();
 
               if (weekCourses.isEmpty) {
-                return _EmptyWeekHint(hasAnyCourses: allCourses.isNotEmpty);
+                return _EmptyWeekHint(
+                  hasAnyCourses: allCourses.isNotEmpty,
+                  onImport: () => context.push('/import'),
+                );
               }
 
               final byDay = <int, List<Course>>{
@@ -77,7 +80,7 @@ class WeekView extends ConsumerWidget {
                               courses: byDay[day]!,
                               totalHeight: totalHeight,
                               onTapCourse: (course) =>
-                                  _showCourseDetail(context, course),
+                                  _showCourseDetail(context, course, sectionTimes),
                               onLongPressCourse: (course) => context.push(
                                 '/course/edit',
                                 extra: course.id,
@@ -97,7 +100,7 @@ class WeekView extends ConsumerWidget {
     );
   }
 
-  void _showCourseDetail(BuildContext context, Course course) {
+  void _showCourseDetail(BuildContext context, Course course, Map<int, SectionTime> sectionTimes) {
     final color = Color(course.colorValue);
     final theme = Theme.of(context);
     showModalBottomSheet(
@@ -149,7 +152,8 @@ class WeekView extends ConsumerWidget {
                 icon: Icons.calendar_today_outlined,
                 label: '时间',
                 value:
-                    '周${_dayLabels[course.dayOfWeek - 1]} 第${course.startSection}-${course.endSection}节',
+                    '周${_dayLabels[course.dayOfWeek - 1]} 第${course.startSection}-${course.endSection}节'
+                    '${_formatSectionTime(course.startSection, course.endSection, sectionTimes)}',
               ),
               _DetailRow(
                 icon: Icons.date_range_outlined,
@@ -162,7 +166,7 @@ class WeekView extends ConsumerWidget {
                   label: '备注',
                   value: course.notes!,
                 ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -172,6 +176,18 @@ class WeekView extends ConsumerWidget {
                   },
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   label: const Text('编辑课程'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    context.push('/course/edit', extra: 'copy:${course.id}');
+                  },
+                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  label: const Text('复制课程'),
                 ),
               ),
             ],
@@ -199,6 +215,14 @@ class WeekView extends ConsumerWidget {
     }
     ranges.add(start == end ? '$start' : '$start-$end');
     return ranges.join(', ');
+  }
+
+  /// 返回节次对应的时钟时间范围，如 " (08:00-08:45)"。
+  String _formatSectionTime(int startSection, int endSection, Map<int, SectionTime> sectionTimes) {
+    final start = sectionTimes[startSection]?.startTime ?? '';
+    final end = sectionTimes[endSection]?.endTime ?? '';
+    if (start.isEmpty || end.isEmpty) return '';
+    return ' ($start-$end)';
   }
 }
 
@@ -450,6 +474,19 @@ class _CourseCard extends StatelessWidget {
                   ),
                 ),
               ],
+              if (course.teacher != null &&
+                  course.teacher!.isNotEmpty) ...[
+                const SizedBox(height: 1),
+                Text(
+                  course.teacher!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: fg.withAlpha((0.65 * 255).round()),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -464,7 +501,8 @@ class _CourseCard extends StatelessWidget {
 /// 无课程时的友好空状态。区分"无任何课程"和"本周无课"。
 class _EmptyWeekHint extends StatelessWidget {
   final bool hasAnyCourses;
-  const _EmptyWeekHint({required this.hasAnyCourses});
+  final VoidCallback? onImport;
+  const _EmptyWeekHint({required this.hasAnyCourses, this.onImport});
 
   @override
   Widget build(BuildContext context) {
@@ -485,11 +523,19 @@ class _EmptyWeekHint extends StatelessWidget {
           Text(
             hasAnyCourses
                 ? '当前周次没有安排课程\n试试切换到其他周次'
-                : '从「设置 → 从教务系统导入」一键抓取，\n或点右下角 + 手动添加',
+                : '从教务系统导入或手动添加课程',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.hintColor),
             textAlign: TextAlign.center,
           ),
+          if (!hasAnyCourses && onImport != null) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onImport,
+              icon: const Icon(Icons.download_outlined, size: 18),
+              label: const Text('导入课表'),
+            ),
+          ],
         ],
       ),
     );

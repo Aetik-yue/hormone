@@ -1,0 +1,28 @@
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant WS as ScheduleScreen
+    participant WV as WeekView(_WeekViewState)
+    participant PC as PageController
+    participant N as selectedWeekNotifier
+
+    Note over WV,N: 初始化
+    WV->>N: ref.read(selectedWeekProvider) 取初值
+    WV->>PC: PageController(initialPage: week-1)
+
+    Note over U,WS: ① 程序化切换（WeekSelector 按钮 / 学期切换）
+    U->>WS: 点击 chevron_right / 切学期
+    WS->>N: nextWeek(totalWeeks) / goTo(w)
+    N-->>WV: selectedWeek 变化 → ref.listen 触发
+    WV->>WV: 置 _isProgrammaticJump = true
+    WV->>PC: animateToPage(week-1, 300ms, easeInOut)
+    PC-->>WV: onPageChanged(index)
+    WV->>WV: _isProgrammaticJump==true → 跳过回写, 复位为 false
+
+    Note over U,PC: ② 手势滑动切换（PageView 原生）
+    U->>PC: 横向拖拽
+    PC-->>WV: onPageChanged(index)
+    WV->>WV: _isProgrammaticJump==false
+    WV->>N: goTo(index+1)
+    N-->>WV: selectedWeek 变化 → ref.listen 触发
+    WV->>WV: target==currentPage → 不触发 animateToPage（防抖）

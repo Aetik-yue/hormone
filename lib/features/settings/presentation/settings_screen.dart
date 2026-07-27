@@ -170,6 +170,10 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
                   Text('节次时间设置', style: theme.textTheme.titleMedium),
                   const Spacer(),
                   TextButton(
+                    onPressed: () => _showTemplatePicker(context, ref),
+                    child: const Text('模板'),
+                  ),
+                  TextButton(
                     onPressed: () => ref
                         .read(sectionTimesProvider.notifier)
                         .resetToDefault(),
@@ -279,5 +283,39 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
           .read(sectionTimesProvider.notifier)
           .setSectionStart(section, timeStr);
     }
+  }
+
+  void _showTemplatePicker(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('选择节次模板',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+              const Divider(height: 1),
+              ...sectionTimeTemplates.map((template) => ListTile(
+                    title: Text(template.name),
+                    subtitle: Text('${template.duration} 分钟/节'),
+                    onTap: () {
+                      ref
+                          .read(sectionTimesProvider.notifier)
+                          .applyTemplate(template);
+                      Navigator.of(ctx).pop();
+                    },
+                  )),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

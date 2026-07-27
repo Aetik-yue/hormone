@@ -43,6 +43,7 @@ class CourseEditScreen extends ConsumerStatefulWidget {
 
 class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
   bool _initialized = false;
+  bool _isDirty = false;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +54,7 @@ class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => context.pop(),
+          onPressed: () => _handleClose(context),
         ),
         title: Text(isEdit ? '编辑课程' : '添加课程'),
         centerTitle: false,
@@ -65,20 +66,53 @@ class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
           ),
         ],
       ),
-      body: initAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载失败：$e')),
-        data: (initial) {
-          if (!_initialized) {
-            _initialized = true;
-            Future.microtask(
-              () => ref.read(courseFormProvider.notifier).init(initial),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: initAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('加载失败：$e')),
+          data: (initial) {
+            if (!_initialized) {
+              _initialized = true;
+              Future.microtask(
+                () => ref.read(courseFormProvider.notifier).init(initial),
+              );
+            }
+            return CourseFormBody(
+              initial: initial,
+              isEdit: isEdit,
+              onChanged: () => _isDirty = true,
             );
-          }
-          return CourseFormBody(initial: initial, isEdit: isEdit);
-        },
+          },
+        ),
       ),
     );
+  }
+
+  Future<void> _handleClose(BuildContext context) async {
+    if (!_isDirty) {
+      if (context.mounted) context.pop();
+      return;
+    }
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('放弃修改？'),
+        content: const Text('你有未保存的修改，确定要放弃吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('继续编辑'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('放弃'),
+          ),
+        ],
+      ),
+    );
+    if (discard == true && context.mounted) context.pop();
   }
 
   Future<void> _save(BuildContext context) async {
@@ -89,7 +123,7 @@ class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
       );
       return;
     }
-    bool ok;
+    bool? ok;
     try {
       ok = await ref.read(courseFormProvider.notifier).save();
     } catch (e) {
@@ -98,6 +132,12 @@ class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
           SnackBar(content: Text('保存失败：$e')),
         );
       }
+      return;
+    }
+    if (ok == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请至少选择一周，否则课程不会显示')),
+      );
       return;
     }
     if (!ok) {
@@ -114,10 +154,12 @@ class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
 class CourseFormBody extends ConsumerStatefulWidget {
   final Course initial;
   final bool isEdit;
+  final VoidCallback? onChanged;
   const CourseFormBody({
     super.key,
     required this.initial,
     required this.isEdit,
+    this.onChanged,
   });
 
   @override
@@ -138,19 +180,22 @@ class _CourseFormBodyState extends ConsumerState<CourseFormBody> {
     _locationCtrl = TextEditingController(text: widget.initial.location ?? '');
     _notesCtrl = TextEditingController(text: widget.initial.notes ?? '');
 
-    _nameCtrl.addListener(
-      () => ref.read(courseFormProvider.notifier).setName(_nameCtrl.text),
-    );
-    _teacherCtrl.addListener(
-      () => ref.read(courseFormProvider.notifier).setTeacher(_teacherCtrl.text),
-    );
-    _locationCtrl.addListener(
-      () =>
-          ref.read(courseFormProvider.notifier).setLocation(_locationCtrl.text),
-    );
-    _notesCtrl.addListener(
-      () => ref.read(courseFormProvider.notifier).setNotes(_notesCtrl.text),
-    );
+    _nameCtrl.addListener(() {
+      ref.read(courseFormProvider.notifier).setName(_nameCtrl.text);
+      widget.onChanged?.call();
+    });
+    _teacherCtrl.addListener(() {
+      ref.read(courseFormProvider.notifier).setTeacher(_teacherCtrl.text);
+      widget.onChanged?.call();
+    });
+    _locationCtrl.addListener(() {
+      ref.read(courseFormProvider.notifier).setLocation(_locationCtrl.text);
+      widget.onChanged?.call();
+    });
+    _notesCtrl.addListener(() {
+      ref.read(courseFormProvider.notifier).setNotes(_notesCtrl.text);
+      widget.onChanged?.call();
+    });
   }
 
   @override
@@ -243,7 +288,9 @@ class _CourseFormBodyState extends ConsumerState<CourseFormBody> {
         ),
         const SizedBox(height: 20),
         const _FieldLabel('上课周次'),
-        Row(
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
           children: [
             TextButton(
               onPressed: () => ref
@@ -256,6 +303,28 @@ class _CourseFormBodyState extends ConsumerState<CourseFormBody> {
                   ref.read(courseFormProvider.notifier).clearWeeks(),
               child: const Text('清空'),
             ),
+            TextButton(
+              onPressed: () => ref
+                  .read(courseFormProvider.notifier)
+                  .setOddWeeks(totalWeeks),
+              child: const Text('单周'),
+            ),
+            TextButton(
+              onPressed: () => ref
+                  .read(courseFormProvider.notifier)
+                  .setEvenWeeks(totalWeeks),
+              child: const Text('双周'),
+            ),
+            TextButton(
+              onPressed: () => ref
+                  .read(courseFormProvider.notifier)
+                  .invertWeeks(totalWeeks),
+              child: const Text('反选'),
+            ),
+          ],
+        ),
+        Row(
+          children: [
             const Spacer(),
             Text('已选 ${course.weeks.length} 周',
                 style: theme.textTheme.labelSmall),

@@ -348,17 +348,32 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             context: context,
             builder: (ctx) => AlertDialog(
               title: const Text('未找到课程数据'),
-              content: SingleChildScrollView(
-                child: SelectableText(
-                  '请确认已在课表页面，然后点右上角「抓取课表」重试。\n\n'
-                  '调试信息:\n$debugStr',
-                  style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+              content: const SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('请确认：'),
+                    SizedBox(height: 8),
+                    Text('1. 已成功登录教务系统'),
+                    Text('2. 当前页面是课程表页面'),
+                    Text('3. 点击右上角「抓取课表」重试'),
+                    SizedBox(height: 8),
+                    Text('如果仍无法抓取，说明你的学校教务系统暂不支持。'),
+                  ],
                 ),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
                   child: const Text('关闭'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    _showDebugInfo(context, debugStr);
+                  },
+                  child: const Text('查看详情'),
                 ),
               ],
             ),
@@ -383,6 +398,27 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         );
       }
     }
+  }
+
+  void _showDebugInfo(BuildContext context, String debugStr) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('调试信息'),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            debugStr,
+            style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _importSelected() async {

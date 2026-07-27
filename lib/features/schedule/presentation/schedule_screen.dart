@@ -91,10 +91,13 @@ class ScheduleScreen extends ConsumerWidget {
               selectedWeek: selectedWeek,
               totalWeeks: totalWeeks,
               isCurrentWeek: isCurrentWeek,
+              currentWeek: computedWeek ?? 1,
               onPrev: () =>
                   ref.read(selectedWeekProvider.notifier).prevWeek(),
               onNext: () =>
                   ref.read(selectedWeekProvider.notifier).nextWeek(totalWeeks),
+              onJumpToWeek: (week) =>
+                  ref.read(selectedWeekProvider.notifier).goTo(week),
             ),
             const Expanded(child: WeekView()),
           ],
@@ -213,15 +216,19 @@ class _WeekSelector extends StatelessWidget {
   final int selectedWeek;
   final int totalWeeks;
   final bool isCurrentWeek;
+  final int currentWeek;
   final VoidCallback onPrev;
   final VoidCallback onNext;
+  final ValueChanged<int>? onJumpToWeek;
 
   const _WeekSelector({
     required this.selectedWeek,
     required this.totalWeeks,
     required this.isCurrentWeek,
+    required this.currentWeek,
     required this.onPrev,
     required this.onNext,
+    this.onJumpToWeek,
   });
 
   @override
@@ -241,10 +248,33 @@ class _WeekSelector extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    '第 $selectedWeek / $totalWeeks 周',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                  InkWell(
+                    onTap: onJumpToWeek != null
+                        ? () => _showWeekPicker(context)
+                        : null,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '第 $selectedWeek / $totalWeeks 周',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              decoration: onJumpToWeek != null
+                                  ? TextDecoration.underline
+                                  : null,
+                            ),
+                          ),
+                          if (onJumpToWeek != null) ...[
+                            const SizedBox(width: 2),
+                            Icon(Icons.arrow_drop_down,
+                                size: 16, color: theme.hintColor),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                   if (isCurrentWeek) ...[
@@ -271,6 +301,15 @@ class _WeekSelector extends StatelessWidget {
               ),
             ),
           ),
+          if (!isCurrentWeek && onJumpToWeek != null)
+            TextButton(
+              onPressed: () => onJumpToWeek!(currentWeek),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: const Text('本周'),
+            ),
           IconButton(
             icon: const Icon(Icons.chevron_right, size: 20),
             visualDensity: VisualDensity.compact,
@@ -278,6 +317,80 @@ class _WeekSelector extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showWeekPicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('跳转到第几周',
+                    style: Theme.of(context).textTheme.titleMedium),
+              ),
+              const Divider(height: 1),
+              SizedBox(
+                height: 300,
+                child: GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 5,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    childAspectRatio: 1.5,
+                  ),
+                  itemCount: totalWeeks,
+                  itemBuilder: (context, i) {
+                    final week = i + 1;
+                    final isSelected = week == selectedWeek;
+                    return InkWell(
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        onJumpToWeek?.call(week);
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).dividerColor,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '$week',
+                          style: TextStyle(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : Theme.of(context).colorScheme.onSurface,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
