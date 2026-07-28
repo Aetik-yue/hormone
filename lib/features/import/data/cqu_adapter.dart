@@ -281,15 +281,11 @@ class CquAdapter extends SchoolAdapter {
       // 隐藏元素（display:none 等）返回全零 DOMRect，无法定位
       if (rect.width === 0 || rect.height === 0) return 0;
       var cardX = rect.left + rect.width / 2;
-      // 使用列宽的一半作为匹配半径，避免跨列匹配
-      var colWidth = _dayHeaders.length > 1
-          ? (_dayHeaders[_dayHeaders.length - 1].x - _dayHeaders[0].x) / (_dayHeaders.length - 1)
-          : 100;
-      var matchRadius = colWidth * 0.6; // 允许 60% 列宽的偏移
+      // 匹配到最近的表头
       var bestDay = 0, bestDist = Infinity;
       for (var i = 0; i < _dayHeaders.length; i++) {
         var dist = Math.abs(_dayHeaders[i].x - cardX);
-        if (dist < bestDist && dist <= matchRadius) { bestDist = dist; bestDay = _dayHeaders[i].day; }
+        if (dist < bestDist) { bestDist = dist; bestDay = _dayHeaders[i].day; }
       }
       if (bestDay > 0) return bestDay;
     }

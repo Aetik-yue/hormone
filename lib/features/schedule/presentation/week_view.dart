@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 
 import 'package:hormone/core/models/course.dart';
 import 'package:hormone/core/utils/week_calculator.dart';
-import 'package:hormone/features/schedule/application/schedule_providers.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/settings/application/section_times_provider.dart';
 
@@ -19,13 +18,21 @@ const double _timeAxisWidth = 48.0;
 /// 周视图课程表：左侧节次时间轴 + 右侧 7 天列，课程卡片按节次定位。
 /// 点击课程卡片弹出详情，长按进入编辑。
 class WeekView extends ConsumerWidget {
-  const WeekView({super.key});
+  final int selectedWeek;
+  final VoidCallback? onImport;
+  final VoidCallback? onWebViewImport;
+
+  const WeekView({
+    super.key,
+    required this.selectedWeek,
+    this.onImport,
+    this.onWebViewImport,
+  });
 
   static const _dayLabels = ['一', '二', '三', '四', '五', '六', '日'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedWeek = ref.watch(selectedWeekProvider);
     final coursesAsync = ref.watch(scheduleCoursesProvider);
     final sectionTimes = ref.watch(sectionTimesProvider);
     final todayWeekday = DateTime.now().weekday; // 1..7
@@ -47,7 +54,8 @@ class WeekView extends ConsumerWidget {
               if (weekCourses.isEmpty) {
                 return _EmptyWeekHint(
                   hasAnyCourses: allCourses.isNotEmpty,
-                  onImport: () => context.push('/import'),
+                  onImport: onImport,
+                  onWebViewImport: onWebViewImport,
                 );
               }
 
@@ -502,7 +510,12 @@ class _CourseCard extends StatelessWidget {
 class _EmptyWeekHint extends StatelessWidget {
   final bool hasAnyCourses;
   final VoidCallback? onImport;
-  const _EmptyWeekHint({required this.hasAnyCourses, this.onImport});
+  final VoidCallback? onWebViewImport;
+  const _EmptyWeekHint({
+    required this.hasAnyCourses,
+    this.onImport,
+    this.onWebViewImport,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -528,13 +541,22 @@ class _EmptyWeekHint extends StatelessWidget {
                 ?.copyWith(color: theme.hintColor),
             textAlign: TextAlign.center,
           ),
-          if (!hasAnyCourses && onImport != null) ...[
+          if (!hasAnyCourses && (onImport != null || onWebViewImport != null)) ...[
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onImport,
-              icon: const Icon(Icons.download_outlined, size: 18),
-              label: const Text('导入课表'),
-            ),
+            if (onWebViewImport != null)
+              FilledButton.icon(
+                onPressed: onWebViewImport,
+                icon: const Icon(Icons.cloud_download_outlined, size: 18),
+                label: const Text('从教务导入'),
+              ),
+            if (onWebViewImport != null && onImport != null)
+              const SizedBox(height: 8),
+            if (onImport != null)
+              OutlinedButton.icon(
+                onPressed: onImport,
+                icon: const Icon(Icons.upload_file_outlined, size: 18),
+                label: const Text('导入课表'),
+              ),
           ],
         ],
       ),
