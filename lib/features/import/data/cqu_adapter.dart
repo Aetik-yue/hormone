@@ -224,24 +224,25 @@ class CquAdapter extends SchoolAdapter {
   }
 
   function findDay(el) {
-    // 方法1：向上找 data-day / data-week / data-col / data-weekday 属性
+    // 方法1：向上找 data-day / data-weekday 属性（仅这两个属性表示星期）
     var node = el;
     for (var d = 0; d < 12 && node; d++) {
-      var attrs = ['data-day', 'data-week', 'data-col', 'data-weekday'];
-      for (var a = 0; a < attrs.length; a++) {
-        var val = node.getAttribute ? node.getAttribute(attrs[a]) : null;
-        if (val) {
-          var n = parseInt(val);
-          if (n >= 1 && n <= 7) return n;
-          var dm2 = val.match(/([一二三四五六日天])/);
-          if (dm2 && dayMap[dm2[1]]) return dayMap[dm2[1]];
-        }
+      var val = node.getAttribute ? node.getAttribute('data-day') : null;
+      if (val) {
+        var n = parseInt(val);
+        if (n >= 1 && n <= 7) return n;
+      }
+      val = node.getAttribute ? node.getAttribute('data-weekday') : null;
+      if (val) {
+        var n = parseInt(val);
+        if (n >= 1 && n <= 7) return n;
+        var dm2 = val.match(/([一二三四五六日天])/);
+        if (dm2 && dayMap[dm2[1]]) return dayMap[dm2[1]];
       }
       node = node.parentElement;
     }
 
     // 方法2：通过 getBoundingClientRect 匹配日期表头的 x 坐标
-    // 预扫描页面上所有"周X"/"星期X"表头元素，记录中心 x 坐标
     if (!_dayHeaders) {
       _dayHeaders = [];
       // 优先检查常见表头元素，避免全量扫描
@@ -253,6 +254,8 @@ class CquAdapter extends SchoolAdapter {
       }
       for (var i = 0; i < headerEls.length; i++) {
         var h = headerEls[i];
+        // 只取叶子节点或只有一个文本子节点的元素，避免重复
+        if (h.children.length > 0) continue;
         var t = (h.textContent || '').trim();
         var dm = t.match(/^周([一二三四五六日天])$/) || t.match(/^星期([一二三四五六日天])$/);
         if (dm && dayMap[dm[1]]) {
@@ -278,10 +281,15 @@ class CquAdapter extends SchoolAdapter {
       // 隐藏元素（display:none 等）返回全零 DOMRect，无法定位
       if (rect.width === 0 || rect.height === 0) return 0;
       var cardX = rect.left + rect.width / 2;
+      // 使用列宽的一半作为匹配半径，避免跨列匹配
+      var colWidth = _dayHeaders.length > 1
+          ? (_dayHeaders[_dayHeaders.length - 1].x - _dayHeaders[0].x) / (_dayHeaders.length - 1)
+          : 100;
+      var matchRadius = colWidth * 0.6; // 允许 60% 列宽的偏移
       var bestDay = 0, bestDist = Infinity;
       for (var i = 0; i < _dayHeaders.length; i++) {
         var dist = Math.abs(_dayHeaders[i].x - cardX);
-        if (dist < bestDist) { bestDist = dist; bestDay = _dayHeaders[i].day; }
+        if (dist < bestDist && dist <= matchRadius) { bestDist = dist; bestDay = _dayHeaders[i].day; }
       }
       if (bestDay > 0) return bestDay;
     }
