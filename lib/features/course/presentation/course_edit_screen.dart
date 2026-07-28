@@ -48,7 +48,8 @@ class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
   @override
   Widget build(BuildContext context) {
     final initAsync = ref.watch(courseInitialProvider(widget.courseId));
-    final isEdit = widget.courseId != null && widget.courseId!.isNotEmpty;
+    final isCopy = widget.courseId?.startsWith('copy:') ?? false;
+    final isEdit = widget.courseId != null && widget.courseId!.isNotEmpty && !isCopy;
 
     return Scaffold(
       appBar: AppBar(

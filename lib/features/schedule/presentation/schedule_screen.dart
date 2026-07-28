@@ -13,11 +13,19 @@ import 'week_view.dart';
 bool _widgetSynced = false;
 
 /// 课程表主页：学期选择 + 周选择器 + 周视图时间轴。
-class ScheduleScreen extends ConsumerWidget {
+class ScheduleScreen extends ConsumerStatefulWidget {
   const ScheduleScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ScheduleScreen> createState() => _ScheduleScreenState();
+}
+
+class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
+  /// 滑动方向：1 = 前进（左滑/下一周），-1 = 后退（右滑/上一周）
+  int _slideDirection = 1;
+
+  @override
+  Widget build(BuildContext context) {
     final selectedWeek = ref.watch(selectedWeekProvider);
     final activeSemester = ref.watch(activeSemesterProvider);
 
@@ -61,7 +69,7 @@ class ScheduleScreen extends ConsumerWidget {
                 Icon(
                   Icons.arrow_drop_down,
                   size: 20,
-                  color: Theme.of(context).hintColor,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ],
             ),
@@ -77,11 +85,12 @@ class ScheduleScreen extends ConsumerWidget {
       ),
       body: GestureDetector(
         onHorizontalDragEnd: (details) {
-          // 左滑 → 下一周，右滑 → 上一周
           if (details.primaryVelocity == null) return;
           if (details.primaryVelocity! < -300) {
+            setState(() => _slideDirection = 1);
             ref.read(selectedWeekProvider.notifier).nextWeek(totalWeeks);
           } else if (details.primaryVelocity! > 300) {
+            setState(() => _slideDirection = -1);
             ref.read(selectedWeekProvider.notifier).prevWeek();
           }
         },
@@ -92,14 +101,48 @@ class ScheduleScreen extends ConsumerWidget {
               totalWeeks: totalWeeks,
               isCurrentWeek: isCurrentWeek,
               currentWeek: computedWeek ?? 1,
-              onPrev: () =>
-                  ref.read(selectedWeekProvider.notifier).prevWeek(),
-              onNext: () =>
-                  ref.read(selectedWeekProvider.notifier).nextWeek(totalWeeks),
-              onJumpToWeek: (week) =>
-                  ref.read(selectedWeekProvider.notifier).goTo(week),
+              onPrev: () {
+                setState(() => _slideDirection = -1);
+                ref.read(selectedWeekProvider.notifier).prevWeek();
+              },
+              onNext: () {
+                setState(() => _slideDirection = 1);
+                ref.read(selectedWeekProvider.notifier).nextWeek(totalWeeks);
+              },
+              onJumpToWeek: (week) {
+                setState(() =>
+                    _slideDirection = week > selectedWeek ? 1 : -1);
+                ref.read(selectedWeekProvider.notifier).goTo(week, totalWeeks: totalWeeks);
+              },
             ),
-            const Expanded(child: WeekView()),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeOutCubic,
+                transitionBuilder: (child, animation) {
+                  final offset = _slideDirection == 1
+                      ? Tween<Offset>(
+                          begin: const Offset(1.0, 0.0),
+                          end: Offset.zero,
+                        )
+                      : Tween<Offset>(
+                          begin: const Offset(-1.0, 0.0),
+                          end: Offset.zero,
+                        );
+                  return SlideTransition(
+                    position: offset.animate(animation),
+                    child: child,
+                  );
+                },
+                child: WeekView(
+                  key: ValueKey(selectedWeek),
+                  selectedWeek: selectedWeek,
+                  onImport: () => context.push('/import'),
+                  onWebViewImport: () => context.push('/import/webview'),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -191,7 +234,8 @@ class ScheduleScreen extends ConsumerWidget {
                                   ref
                                       .read(selectedWeekProvider.notifier)
                                       .goTo(computeCurrentWeek(
-                                          s.startDate, DateTime.now()));
+                                          s.startDate, DateTime.now()),
+                                          totalWeeks: s.totalWeeks);
                                   ref
                                       .read(widgetServiceProvider)
                                       .updateTodayWidget();
@@ -239,7 +283,7 @@ class _WeekSelector extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.chevron_left, size: 20),
+            icon: Icon(Icons.chevron_left, size: 20, color: theme.colorScheme.primary),
             visualDensity: VisualDensity.compact,
             onPressed: selectedWeek > 1 ? onPrev : null,
           ),
@@ -271,7 +315,7 @@ class _WeekSelector extends StatelessWidget {
                           if (onJumpToWeek != null) ...[
                             const SizedBox(width: 2),
                             Icon(Icons.arrow_drop_down,
-                                size: 16, color: theme.hintColor),
+                                size: 16, color: theme.colorScheme.primary),
                           ],
                         ],
                       ),
@@ -311,7 +355,7 @@ class _WeekSelector extends StatelessWidget {
               child: const Text('本周'),
             ),
           IconButton(
-            icon: const Icon(Icons.chevron_right, size: 20),
+            icon: Icon(Icons.chevron_right, size: 20, color: theme.colorScheme.primary),
             visualDensity: VisualDensity.compact,
             onPressed: selectedWeek < totalWeeks ? onNext : null,
           ),

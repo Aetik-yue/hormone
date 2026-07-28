@@ -37,9 +37,11 @@ class SelectedWeekNotifier extends StateNotifier<int> {
   }
 
   /// 手动跳转到指定周（用户操作或小组件深链）。
-  void goTo(int week) {
+  /// 周次会被钳制到 [1, totalWeeks] 范围内。
+  void goTo(int week, {int totalWeeks = 999}) {
     _userChanged = true;
-    state = week;
+    final clamped = week < 1 ? 1 : (week > totalWeeks ? totalWeeks : week);
+    state = clamped;
   }
 
   void nextWeek(int totalWeeks) => goTo(state < totalWeeks ? state + 1 : state);

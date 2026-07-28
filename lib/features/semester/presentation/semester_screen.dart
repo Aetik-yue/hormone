@@ -303,7 +303,8 @@ class _SemesterEditSheetState extends ConsumerState<SemesterEditSheet> {
                 ],
               ),
             ),
-            if (!isEdit || (widget.initial?.id ?? '') != '')
+            // 新建学期时显示"保存后设为当前学期"开关
+            if (!isEdit)
               SwitchListTile(
                 title: const Text('保存后设为当前学期'),
                 value: _activate,

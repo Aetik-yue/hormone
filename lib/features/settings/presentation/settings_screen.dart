@@ -223,7 +223,7 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
                         ),
                         const SizedBox(width: 8),
                         DropdownButton<int>(
-                          value: duration,
+                          value: _durationOptions.contains(duration) ? duration : null,
                           items: _durationOptions
                               .map((d) => DropdownMenuItem(
                                     value: d,

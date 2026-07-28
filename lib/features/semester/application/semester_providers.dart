@@ -15,7 +15,8 @@ final activeSemesterProvider = FutureProvider<Semester?>((ref) async {
 final semestersProvider = FutureProvider<List<Semester>>((ref) async {
   final repo = ref.watch(semesterRepositoryProvider);
   final semesters = await repo.getSemesters();
-  final active = ref.watch(activeSemesterProvider).value;
+  // 等待激活学期加载完成，确保首次排序正确
+  final active = await ref.watch(activeSemesterProvider.future);
   semesters.sort((a, b) {
     // 激活学期置顶
     if (a.id == active?.id) return -1;

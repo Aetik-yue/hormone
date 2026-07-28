@@ -77,14 +77,21 @@ class CquAdapter extends SchoolAdapter {
     var code = codeMatch[1];
 
     // 解析周次：支持 [1-7周], [1-3,5-14周], [5、7-9、11-15周] 等
-    var weekMatch = text.match(/\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，、]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*周\]/);
+    // 也支持 单周（奇数周）和 双周（偶数周）
     var weeks = [];
-    if (weekMatch) {
-      weeks = parseRange(weekMatch[1]);
+    if (/单周/.test(text)) {
+      weeks = [for (var i = 1; i <= 20; i += 2) i];
+    } else if (/双周/.test(text)) {
+      weeks = [for (var i = 2; i <= 20; i += 2) i];
+    } else {
+      var weekMatch = text.match(/\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，、]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*周\]/);
+      if (weekMatch) {
+        weeks = parseRange(weekMatch[1]);
+      }
     }
 
-    // 解析节次：[1-2节], [3-4节], [6-7节]
-    var secMatch = text.match(/\[(\d+(?:\s*[-–~]\s*\d+)?)\s*节\]/);
+    // 解析节次：[1-2节], [3-4节], [1-2,3-4节], [1、3节] 等
+    var secMatch = text.match(/\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，、]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*节\]/);
     var startSec = 1, endSec = 1;
     if (secMatch) {
       var secs = parseRange(secMatch[1]);
@@ -162,7 +169,7 @@ class CquAdapter extends SchoolAdapter {
       // 下一行：周次 + 节次 + 教室
       if (i + 1 >= lines.length) continue;
       var infoLine = lines[i + 1];
-      var wm = infoLine.match(/\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*周\]/);
+      var wm = infoLine.match(/\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，、]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*周\]/);
       var sm = infoLine.match(/\[(\d+(?:\s*[-–~]\s*\d+)?)\s*节\]/);
       if (!wm || !sm) continue;
 
@@ -281,11 +288,15 @@ class CquAdapter extends SchoolAdapter {
       // 隐藏元素（display:none 等）返回全零 DOMRect，无法定位
       if (rect.width === 0 || rect.height === 0) return 0;
       var cardX = rect.left + rect.width / 2;
-      // 匹配到最近的表头
+      // 使用列宽的一部分作为匹配半径，避免跨列匹配
+      var colWidth = _dayHeaders.length > 1
+          ? (_dayHeaders[_dayHeaders.length - 1].x - _dayHeaders[0].x) / (_dayHeaders.length - 1)
+          : 100;
+      var matchRadius = colWidth * 0.6;
       var bestDay = 0, bestDist = Infinity;
       for (var i = 0; i < _dayHeaders.length; i++) {
         var dist = Math.abs(_dayHeaders[i].x - cardX);
-        if (dist < bestDist) { bestDist = dist; bestDay = _dayHeaders[i].day; }
+        if (dist < bestDist && dist <= matchRadius) { bestDist = dist; bestDay = _dayHeaders[i].day; }
       }
       if (bestDay > 0) return bestDay;
     }

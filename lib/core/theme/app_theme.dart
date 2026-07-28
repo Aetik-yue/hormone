@@ -23,10 +23,18 @@ class AppTheme {
       surface: AppColors.surfaceLight,
     ),
     scaffoldBackgroundColor: AppColors.backgroundLight,
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
+    appBarTheme: AppBarTheme(
+      backgroundColor: AppColors.surfaceLight,
       elevation: 0,
+      scrolledUnderElevation: 2,
       foregroundColor: AppColors.textLight,
+      iconTheme: const IconThemeData(color: AppColors.primary, size: 24),
+      actionsIconTheme: const IconThemeData(color: AppColors.primary, size: 24),
+      titleTextStyle: const TextStyle(
+        color: AppColors.textLight,
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+      ),
     ),
     cardTheme: CardThemeData(
       color: AppColors.surfaceLight,
@@ -44,10 +52,18 @@ class AppTheme {
       surface: AppColors.surfaceDark,
     ),
     scaffoldBackgroundColor: AppColors.backgroundDark,
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
+    appBarTheme: AppBarTheme(
+      backgroundColor: AppColors.surfaceDark,
       elevation: 0,
+      scrolledUnderElevation: 2,
       foregroundColor: AppColors.textDark,
+      iconTheme: const IconThemeData(color: AppColors.primary, size: 24),
+      actionsIconTheme: const IconThemeData(color: AppColors.primary, size: 24),
+      titleTextStyle: const TextStyle(
+        color: AppColors.textDark,
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+      ),
     ),
     cardTheme: CardThemeData(
       color: AppColors.surfaceDark,

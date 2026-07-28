@@ -48,8 +48,7 @@ app.*.map.json
 /web/
 /windows/
 
-# Build artifacts (APK releases)
-/version/
+
 
 # Sensitive & environment
 .env
