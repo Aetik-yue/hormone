@@ -11,7 +11,7 @@
 
 | 周视图 | 课程编辑 | 学期管理 | 设置 |
 |--------|----------|----------|------|
-| ![week](docs/screenshots/week.png) | ![edit](docs/screenshots/edit.png) | ![semester](docs/screenshots/semester.png) | ![settings](docs/screenshots/settings.png) |
+| ![week](docs/screenshots/week.jpg) | ![edit](docs/screenshots/edit.jpg) | ![semester](docs/screenshots/semester.jpg) | ![settings](docs/screenshots/settings.jpg) |
 
 ## 功能
 
