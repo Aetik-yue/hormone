@@ -35,16 +35,20 @@ class WeekView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final coursesAsync = ref.watch(scheduleCoursesProvider);
     final sectionTimes = ref.watch(sectionTimesProvider);
-    final todayWeekday = DateTime.now().weekday; // 1..7
+    // 只取一次当前日期，避免多次 DateTime.now() 在午夜边界不一致。
+    final now = DateTime.now();
+    final todayWeekday = now.weekday; // 1..7
     final maxSections = sectionTimes.length;
 
     // 学期开学日期，用于推算选中周每天的实际日期。
     final semesterStart =
         ref.watch(activeSemesterProvider).valueOrNull?.startDate;
     // 仅当查看的是当前周时，才高亮"今天"所在列（避免查看历史/未来周时
-    // 误高亮某一天的日期）。
-    final isCurrentWeek = semesterStart != null &&
-        computeCurrentWeek(semesterStart, DateTime.now()) == selectedWeek;
+    // 误高亮某一天的日期）。currentWeek>0 防御开学前误判。
+    final currentWeek = semesterStart != null
+        ? computeCurrentWeek(semesterStart, now)
+        : 0;
+    final isCurrentWeek = currentWeek > 0 && currentWeek == selectedWeek;
 
     return Column(
       children: [
@@ -300,17 +304,19 @@ class _DayHeaderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasStart = semesterStart != null;
-    // 选中周周一与周日，用于左上角月份与各列日期。
-    final firstDate =
-        hasStart ? dateForWeekday(semesterStart!, selectedWeek, 1) : null;
-    final lastDate =
-        hasStart ? dateForWeekday(semesterStart!, selectedWeek, 7) : null;
+    // 一次性算出选中周 7 天的日期，月份标签与各列日期共用同一份结果。
+    final dates = semesterStart != null
+        ? [
+            for (var d = 1; d <= 7; d++)
+              dateForWeekday(semesterStart!, selectedWeek, d),
+          ]
+        : <DateTime>[];
+    final hasDates = dates.isNotEmpty;
     // 跨月时显示 "7-8月"，否则 "7月"。
-    final monthLabel = firstDate != null && lastDate != null
-        ? (firstDate.month == lastDate.month
-            ? '${firstDate.month}月'
-            : '${firstDate.month}-${lastDate.month}月')
+    final monthLabel = hasDates
+        ? (dates.first.month == dates.last.month
+            ? '${dates.first.month}月'
+            : '${dates.first.month}-${dates.last.month}月')
         : null;
 
     return Padding(
@@ -336,8 +342,7 @@ class _DayHeaderRow extends StatelessWidget {
           ...List.generate(7, (i) {
             final day = i + 1;
             final isToday = isCurrentWeek && day == todayWeekday;
-            final date =
-                hasStart ? dateForWeekday(semesterStart!, selectedWeek, day) : null;
+            final date = hasDates ? dates[i] : null;
             return Expanded(
               child: Center(
                 child: Column(

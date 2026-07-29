@@ -312,7 +312,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
       if (decoded is! List) {
         throw Exception('课表数据格式异常，请确认已进入课表页面后重试');
       }
-      final list = decoded;
+      final List<dynamic> list = decoded;
       final allExtracted =
           list.map((e) => ExtractedCourse.fromJson(e as Map<String, dynamic>)).toList();
       // 过滤掉无法识别星期的课程（dayOfWeek=0 表示 findDay 未能推断）
