@@ -9,9 +9,9 @@
 
 ## 截图
 
-| 周视图 | 课程编辑 | 学期管理 | 设置 |
-|--------|----------|----------|------|
-| ![week](docs/screenshots/week.jpg) | ![edit](docs/screenshots/edit.jpg) | ![semester](docs/screenshots/semester.jpg) | ![settings](docs/screenshots/settings.jpg) |
+| 周视图 | 课程编辑 | 学期管理 | 设置 | 教务导入 |
+|--------|----------|----------|------|----------|
+| ![week](docs/screenshots/week.jpg) | ![edit](docs/screenshots/edit.jpg) | ![semester](docs/screenshots/semester.jpg) | ![settings](docs/screenshots/settings.jpg) | ![import](docs/screenshots/import.jpg) |
 
 ## 功能
 
