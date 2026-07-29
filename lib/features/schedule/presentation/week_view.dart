@@ -38,9 +38,22 @@ class WeekView extends ConsumerWidget {
     final todayWeekday = DateTime.now().weekday; // 1..7
     final maxSections = sectionTimes.length;
 
+    // 学期开学日期，用于推算选中周每天的实际日期。
+    final semesterStart =
+        ref.watch(activeSemesterProvider).valueOrNull?.startDate;
+    // 仅当查看的是当前周时，才高亮"今天"所在列（避免查看历史/未来周时
+    // 误高亮某一天的日期）。
+    final isCurrentWeek = semesterStart != null &&
+        computeCurrentWeek(semesterStart, DateTime.now()) == selectedWeek;
+
     return Column(
       children: [
-        _DayHeaderRow(todayWeekday: todayWeekday),
+        _DayHeaderRow(
+          todayWeekday: todayWeekday,
+          semesterStart: semesterStart,
+          selectedWeek: selectedWeek,
+          isCurrentWeek: isCurrentWeek,
+        ),
         Expanded(
           child: coursesAsync.when(
             loading: () =>
@@ -84,7 +97,7 @@ class WeekView extends ConsumerWidget {
                           return Expanded(
                             child: _DayColumn(
                               day: day,
-                              isToday: day == todayWeekday,
+                              isToday: isCurrentWeek && day == todayWeekday,
                               courses: byDay[day]!,
                               totalHeight: totalHeight,
                               onTapCourse: (course) =>
@@ -271,33 +284,90 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-/// 顶部星期表头，今天加粗并着主题色。
+/// 顶部星期表头：左上角显示月份，每列星期下方显示日期，今天加粗并着主题色。
 class _DayHeaderRow extends StatelessWidget {
   final int todayWeekday;
-  const _DayHeaderRow({required this.todayWeekday});
+  final DateTime? semesterStart;
+  final int selectedWeek;
+  final bool isCurrentWeek;
+  const _DayHeaderRow({
+    required this.todayWeekday,
+    required this.semesterStart,
+    required this.selectedWeek,
+    required this.isCurrentWeek,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasStart = semesterStart != null;
+    // 选中周周一与周日，用于左上角月份与各列日期。
+    final firstDate =
+        hasStart ? dateForWeekday(semesterStart!, selectedWeek, 1) : null;
+    final lastDate =
+        hasStart ? dateForWeekday(semesterStart!, selectedWeek, 7) : null;
+    // 跨月时显示 "7-8月"，否则 "7月"。
+    final monthLabel = firstDate != null && lastDate != null
+        ? (firstDate.month == lastDate.month
+            ? '${firstDate.month}月'
+            : '${firstDate.month}-${lastDate.month}月')
+        : null;
+
     return Padding(
-      padding: const EdgeInsets.only(top: 2, bottom: 2),
+      padding: const EdgeInsets.only(top: 2, bottom: 4),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(width: _timeAxisWidth),
+          SizedBox(
+            width: _timeAxisWidth,
+            child: monthLabel != null
+                ? Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Text(
+                      monthLabel,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.hintColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
           ...List.generate(7, (i) {
             final day = i + 1;
-            final isToday = day == todayWeekday;
+            final isToday = isCurrentWeek && day == todayWeekday;
+            final date =
+                hasStart ? dateForWeekday(semesterStart!, selectedWeek, day) : null;
             return Expanded(
               child: Center(
-                child: Text(
-                  '周${WeekView._dayLabels[i]}',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight:
-                        isToday ? FontWeight.bold : FontWeight.normal,
-                    color: isToday
-                        ? theme.colorScheme.primary
-                        : theme.hintColor,
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '周${WeekView._dayLabels[i]}',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight:
+                            isToday ? FontWeight.bold : FontWeight.normal,
+                        color: isToday
+                            ? theme.colorScheme.primary
+                            : theme.hintColor,
+                      ),
+                    ),
+                    if (date != null) ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        '${date.day}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontSize: 10,
+                          fontWeight:
+                              isToday ? FontWeight.bold : FontWeight.normal,
+                          color: isToday
+                              ? theme.colorScheme.primary
+                              : theme.hintColor,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             );
