@@ -80,9 +80,9 @@ class CquAdapter extends SchoolAdapter {
     // 也支持 单周（奇数周）和 双周（偶数周）
     var weeks = [];
     if (/单周/.test(text)) {
-      weeks = [for (var i = 1; i <= 20; i += 2) i];
+      for (var i = 1; i <= 20; i += 2) weeks.push(i);
     } else if (/双周/.test(text)) {
-      weeks = [for (var i = 2; i <= 20; i += 2) i];
+      for (var i = 2; i <= 20; i += 2) weeks.push(i);
     } else {
       var weekMatch = text.match(/\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，、]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*周\]/);
       if (weekMatch) {
