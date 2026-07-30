@@ -180,7 +180,11 @@ class _SemesterEditSheetState extends ConsumerState<SemesterEditSheet> {
         Semester(id: '', name: '', startDate: DateTime.now(), totalWeeks: 18);
     _nameCtrl = TextEditingController(text: s.name);
     _overrideOn = s.currentWeekOverride != null;
-    ref.read(semesterFormProvider.notifier).init(s);
+    // initState 中不可修改 Provider 状态（riverpod 禁止在 Widget 生命周期内修改），
+    // 延迟到微任务执行，待当前 build 完成后再初始化表单。
+    Future.microtask(() {
+      if (mounted) ref.read(semesterFormProvider.notifier).init(s);
+    });
   }
 
   @override
