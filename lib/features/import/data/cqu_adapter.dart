@@ -231,77 +231,124 @@ class CquAdapter extends SchoolAdapter {
   }
 
   function findDay(el) {
-    // 方法1：向上找 data-day / data-weekday 属性（仅这两个属性表示星期）
+    // ── 方法1：向上找 data-day / data-weekday 属性 ──
+    // 不再直接 return，记录结果供后续与方法2交叉验证。
+    var method1Result = 0, method1Depth = 99;
     var node = el;
     for (var d = 0; d < 12 && node; d++) {
       var val = node.getAttribute ? node.getAttribute('data-day') : null;
       if (val) {
         var n = parseInt(val);
-        if (n >= 1 && n <= 7) return n;
+        if (n >= 1 && n <= 7) { method1Result = n; method1Depth = d; break; }
+        // 兼容 0-indexed（0=周一 … 6=周日）
+        if (n >= 0 && n <= 6) { method1Result = n + 1; method1Depth = d; break; }
       }
       val = node.getAttribute ? node.getAttribute('data-weekday') : null;
       if (val) {
         var n = parseInt(val);
-        if (n >= 1 && n <= 7) return n;
+        if (n >= 1 && n <= 7) { method1Result = n; method1Depth = d; break; }
         var dm2 = val.match(/([一二三四五六日天])/);
-        if (dm2 && dayMap[dm2[1]]) return dayMap[dm2[1]];
+        if (dm2 && dayMap[dm2[1]]) { method1Result = dayMap[dm2[1]]; method1Depth = d; break; }
       }
       node = node.parentElement;
     }
 
-    // 方法2：通过 getBoundingClientRect 匹配日期表头的 x 坐标
+    // ── 方法2：通过 getBoundingClientRect 匹配日期表头的 x 坐标 ──
     if (!_dayHeaders) {
       _dayHeaders = [];
-      // 优先检查常见表头元素，避免全量扫描
-      var headerEls = document.querySelectorAll(
-        'th, [class*="week"], [class*="day"], [class*="header"], [class*="head"]'
-      );
-      if (headerEls.length === 0) {
-        headerEls = document.body.querySelectorAll('*');
-      }
-      for (var i = 0; i < headerEls.length; i++) {
-        var h = headerEls[i];
-        // 只取叶子节点或只有一个文本子节点的元素，避免重复
-        if (h.children.length > 0) continue;
+      // 全量扫描所有元素，避免 class 选择器找到干扰项后不兜底
+      var allEls = document.body.querySelectorAll('*');
+      for (var i = 0; i < allEls.length; i++) {
+        var h = allEls[i];
         var t = (h.textContent || '').trim();
-        var dm = t.match(/^周([一二三四五六日天])$/) || t.match(/^星期([一二三四五六日天])$/);
+        // 用文本长度限制排除大段文本容器（替代叶子节点过滤）
+        if (t.length === 0 || t.length > 20) continue;
+        // 放宽正则：允许"周一 09/02"、"周一(开学)"等格式
+        var dm = t.match(/^周([一二三四五六日天])/) || t.match(/^星期([一二三四五六日天])/);
         if (dm && dayMap[dm[1]]) {
           var rect = h.getBoundingClientRect();
           if (rect.width > 0 && rect.height > 0) {
             var x = rect.left + rect.width / 2;
-            // 去重：避免父子元素都匹配时重复记录同一位置
+            // 去重：避免同一位置重复记录
             var isDup = false;
             for (var j = 0; j < _dayHeaders.length; j++) {
               if (Math.abs(_dayHeaders[j].x - x) < 2) { isDup = true; break; }
             }
             if (!isDup) {
-              _dayHeaders.push({ day: dayMap[dm[1]], x: x });
+              _dayHeaders.push({ day: dayMap[dm[1]], x: x, inferred: false });
             }
           }
         }
       }
       _dayHeaders.sort(function(a, b) { return a.x - b.x; });
+
+      // ── 表头补全：用外推法填补缺失的表头 ──
+      if (_dayHeaders.length >= 2 && _dayHeaders.length < 7) {
+        var colWidth = (_dayHeaders[_dayHeaders.length - 1].x - _dayHeaders[0].x) / (_dayHeaders.length - 1);
+        // 左侧补全（day 值递减，x 递减）
+        while (_dayHeaders.length < 7 && _dayHeaders[0].day > 1) {
+          _dayHeaders.unshift({
+            day: _dayHeaders[0].day - 1,
+            x: _dayHeaders[0].x - colWidth,
+            inferred: true
+          });
+        }
+        // 右侧补全（day 值递增，x 递增）
+        while (_dayHeaders.length < 7 && _dayHeaders[_dayHeaders.length - 1].day < 7) {
+          _dayHeaders.push({
+            day: _dayHeaders[_dayHeaders.length - 1].day + 1,
+            x: _dayHeaders[_dayHeaders.length - 1].x + colWidth,
+            inferred: true
+          });
+        }
+      }
+
+      // 调试输出：表头检测结果
+      console.log('[CQU] Day headers: ' + JSON.stringify(_dayHeaders.map(function(h) {
+        return { day: h.day, x: Math.round(h.x), inferred: h.inferred };
+      })));
     }
 
+    // ── 位置匹配：找最近表头 ──
+    var method2Result = 0, method2Dist = Infinity;
     if (_dayHeaders.length >= 1) {
       var rect = el.getBoundingClientRect();
       // 隐藏元素（display:none 等）返回全零 DOMRect，无法定位
-      if (rect.width === 0 || rect.height === 0) return 0;
+      if (rect.width === 0 || rect.height === 0) return method1Result > 0 ? method1Result : 0;
       var cardX = rect.left + rect.width / 2;
-      // 使用列宽的一部分作为匹配半径，避免跨列匹配
       var colWidth = _dayHeaders.length > 1
           ? (_dayHeaders[_dayHeaders.length - 1].x - _dayHeaders[0].x) / (_dayHeaders.length - 1)
           : 100;
-      var matchRadius = colWidth * 0.6;
+      var matchRadius = colWidth * 0.75;  // 提升半径，容忍更大偏移
       var bestDay = 0, bestDist = Infinity;
       for (var i = 0; i < _dayHeaders.length; i++) {
         var dist = Math.abs(_dayHeaders[i].x - cardX);
-        if (dist < bestDist && dist <= matchRadius) { bestDist = dist; bestDay = _dayHeaders[i].day; }
+        if (dist < bestDist) { bestDist = dist; bestDay = _dayHeaders[i].day; }
       }
-      if (bestDay > 0) return bestDay;
+      method2Result = bestDay;
+      method2Dist = bestDist;
     }
 
-    return 0; // 未知（无法从 DOM 推断星期）
+    // ── 交叉验证：综合两方法结果 ──
+    if (method1Result > 0 && method2Result > 0) {
+      if (method1Result === method2Result) {
+        return method1Result;  // 一致，高置信度
+      }
+      // 不一致：根据置信度选择
+      var withinRadius = method2Dist <= matchRadius;
+      if (withinRadius && method1Depth >= 3) {
+        // method2 在半径内且 method1 深度较浅（可能是远祖先的通用属性），优先 method2
+        console.log('[CQU] Mismatch: m1=' + method1Result + '(depth=' + method1Depth + ') m2=' + method2Result + '(dist=' + Math.round(method2Dist) + ') → use m2');
+        return method2Result;
+      }
+      // 默认优先 method1（DOM 属性通常更准确）
+      console.log('[CQU] Mismatch: m1=' + method1Result + '(depth=' + method1Depth + ') m2=' + method2Result + '(dist=' + Math.round(method2Dist) + ') → use m1');
+      return method1Result;
+    }
+    // 只有一个方法有结果，直接返回
+    if (method1Result > 0) return method1Result;
+    if (method2Result > 0) return method2Result;
+    return 0; // 两方法都失败
   }
 })();
 ''';
