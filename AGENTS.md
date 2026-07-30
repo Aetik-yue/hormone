@@ -73,3 +73,43 @@ go_router, declared once in `app/router.dart`. Screens `context.push` existing r
 ## CI
 
 `.github/workflows/ci.yml` runs on push/PR to main: `pub get` → `build_runner` → `flutter analyze --fatal-infos --fatal-warnings` → `flutter test`. Pushing a `v*` tag triggers `.github/workflows/release.yml` (Android APK/AAB + unsigned iOS). Both run on a clean checkout, so generated code is rebuilt in CI — local `*.g.dart` changes won't be committed.
+
+## Branch Strategy
+
+Default branch: `develop` (active development). `main` = production-ready releases only.
+
+| Branch | Purpose | Lifecycle |
+|--------|---------|-----------|
+| `main` | Stable release code | Permanent, protected |
+| `develop` | Daily integration | Permanent, protected |
+| `feature/xxx` | New feature | Temporary, delete after merge |
+| `fix/xxx` | Bug fix | Temporary, delete after merge |
+| `release/vX.Y.Z` | Release preparation | Temporary |
+| `hotfix/xxx` | Production emergency fix | Temporary |
+
+### Branch naming
+
+```
+feature/week-view-month-date
+feature/cqu-import-robustness
+fix/findday-monday-shift
+release/v1.0.7
+hotfix/crash-on-semester-delete
+```
+
+### Commit message format
+
+```
+<type>(<scope>): <short description>
+```
+
+Types: `feat` · `fix` · `docs` · `chore` · `refactor` · `test`
+
+### Workflow
+
+1. New branch from `develop`: `git checkout -b feature/xxx develop`
+2. Develop + commit + push
+3. Open PR → `develop` (requires 1 approval + CI pass)
+4. After merge, delete the feature branch
+5. To release: create `release/vX.Y.Z` from `develop` → fix bugs, bump version → PR to `main` + `develop`, tag `vX.Y.Z`
+6. Hotfix: branch from `main` → fix → PR to `main` + `develop`
