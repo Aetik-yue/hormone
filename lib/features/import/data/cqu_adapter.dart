@@ -256,6 +256,7 @@ class CquAdapter extends SchoolAdapter {
     // ── 方法2：通过 getBoundingClientRect 匹配日期表头的 x 坐标 ──
     if (!_dayHeaders) {
       _dayHeaders = [];
+      var vw = window.innerWidth || 9999;
       // 全量扫描所有元素，避免 class 选择器找到干扰项后不兜底
       var allEls = document.body.querySelectorAll('*');
       for (var i = 0; i < allEls.length; i++) {
@@ -269,6 +270,10 @@ class CquAdapter extends SchoolAdapter {
           var rect = h.getBoundingClientRect();
           if (rect.width > 0 && rect.height > 0) {
             var x = rect.left + rect.width / 2;
+            // 过滤屏外副本：CQU 页面存在一组定位在视口外的「周X」表头模板
+            // （x 为负或远超视口宽度），不过滤会污染列宽与最近表头匹配，
+            // 导致课程错配到相邻星期。
+            if (x < 0 || x > vw + 2000) continue;
             // 去重：避免同一位置重复记录
             var isDup = false;
             for (var j = 0; j < _dayHeaders.length; j++) {
@@ -282,23 +287,26 @@ class CquAdapter extends SchoolAdapter {
       }
       _dayHeaders.sort(function(a, b) { return a.x - b.x; });
 
-      // ── 表头补全：用外推法填补缺失的表头 ──
+      // ── 表头补全：用等距外推填补缺失的星期 ──
+      // 某个星期的真实表头可能未被检测到（如「周一」表头被屏外模板遮蔽），
+      // 此时按已检测表头的等距间距外推补齐 1..7，避免课程错配到相邻星期。
       if (_dayHeaders.length >= 2 && _dayHeaders.length < 7) {
-        var colWidth = (_dayHeaders[_dayHeaders.length - 1].x - _dayHeaders[0].x) / (_dayHeaders.length - 1);
-        // 左侧补全（day 值递减，x 递减）
-        while (_dayHeaders.length < 7 && _dayHeaders[0].day > 1) {
-          _dayHeaders.unshift({
-            day: _dayHeaders[0].day - 1,
-            x: _dayHeaders[0].x - colWidth,
-            inferred: true
-          });
+        // 用相邻表头间距的中位数作为列宽（比首尾端点更抗离群点）
+        var steps = [];
+        for (var i = 1; i < _dayHeaders.length; i++) {
+          steps.push(_dayHeaders[i].x - _dayHeaders[i - 1].x);
         }
-        // 右侧补全（day 值递增，x 递增）
-        while (_dayHeaders.length < 7 && _dayHeaders[_dayHeaders.length - 1].day < 7) {
+        steps.sort(function(a, b) { return a - b; });
+        var colWidth = steps[Math.floor(steps.length / 2)] || 100;
+        var ref = _dayHeaders[0];
+        var have = {};
+        for (var i = 0; i < _dayHeaders.length; i++) have[_dayHeaders[i].day] = _dayHeaders[i].x;
+        _dayHeaders = [];
+        for (var d = 1; d <= 7; d++) {
           _dayHeaders.push({
-            day: _dayHeaders[_dayHeaders.length - 1].day + 1,
-            x: _dayHeaders[_dayHeaders.length - 1].x + colWidth,
-            inferred: true
+            day: d,
+            x: have[d] !== undefined ? have[d] : ref.x + (d - ref.day) * colWidth,
+            inferred: have[d] === undefined
           });
         }
       }
