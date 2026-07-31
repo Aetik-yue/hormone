@@ -29,9 +29,9 @@ jobs:
           cache: true
 
       # This repo is maintained without generated platform directories.
-      # Recreate android/ in CI for automated artifact builds.
-      - name: Create Android project
-        run: flutter create --platforms=android .
+      # Recreate both platforms in CI (flutter_launcher_icons generates for both).
+      - name: Create platform projects
+        run: flutter create --platforms=android,ios .
 
       - name: Get dependencies
         run: flutter pub get
@@ -74,8 +74,8 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Create iOS project
-        run: flutter create --platforms=ios .
+      - name: Create platform projects
+        run: flutter create --platforms=android,ios .
 
       - name: Get dependencies
         run: flutter pub get
