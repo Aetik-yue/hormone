@@ -230,6 +230,78 @@ class CquAdapter extends SchoolAdapter {
     return unique;
   }
 
+  // 预扫描日期表头：过滤屏外副本，并对缺失的星期按等距外推补齐。
+  function _prepareDayDetection(candidates) {
+    if (_dayHeaders) return;
+    _dayHeaders = [];
+    // 课程卡片 x 中位数（用于挑选离卡片最近的表头）
+    var cardMed = null;
+    var tmp = [];
+    for (var i = 0; i < candidates.length; i++) {
+      var r = candidates[i].getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) tmp.push(r.left + r.width / 2);
+    }
+    if (tmp.length > 0) {
+      tmp.sort(function(a, b) { return a - b; });
+      cardMed = tmp[Math.floor(tmp.length / 2)];
+    }
+    // 收集"周X"/"星期X"叶子表头，按星期分组；排除屏外副本（x<0 或远超视口）。
+    // 教务页常把一套表头复制后移到屏外，若不排除会让列宽/偏移检测失真。
+    var byDay = {};
+    var headerEls = document.querySelectorAll(
+      'th, [class*="week"], [class*="day"], [class*="header"], [class*="head"]'
+    );
+    if (headerEls.length === 0) headerEls = document.body.querySelectorAll('*');
+    var vw = window.innerWidth || 9999;
+    for (var i = 0; i < headerEls.length; i++) {
+      var h = headerEls[i];
+      if (h.children.length > 0) continue;
+      var t = (h.textContent || '').trim();
+      var dm = t.match(/^周([一二三四五六日天])$/) || t.match(/^星期([一二三四五六日天])$/);
+      if (!dm || !dayMap[dm[1]]) continue;
+      var rect = h.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      var x = rect.left + rect.width / 2;
+      if (x < 0 || x > vw + 2000) continue; // 屏外副本
+      var day = dayMap[dm[1]];
+      if (!byDay[day]) byDay[day] = [];
+      byDay[day].push(x);
+    }
+    // 每个星期取最接近卡片中位数的一个表头
+    var detected = [];
+    for (var day in byDay) {
+      var xs = byDay[day];
+      var best = xs[0];
+      if (cardMed !== null && xs.length > 1) {
+        var bestDist = Math.abs(best - cardMed);
+        for (var k = 1; k < xs.length; k++) {
+          var dd = Math.abs(xs[k] - cardMed);
+          if (dd < bestDist) { bestDist = dd; best = xs[k]; }
+        }
+      }
+      detected.push({ day: parseInt(day, 10), x: best });
+    }
+    // 某个星期的真实表头可能根本没被检测到（只剩屏外副本，已被排除），
+    // 导致该日缺失。若已检测到 >=2 个表头，按它们的等距外推补齐 1..7，
+    // 例如只检测到周二..周日（间距 69），就外推周一 = 周二 - 69。
+    if (detected.length >= 2 && detected.length < 7) {
+      detected.sort(function(a, b) { return a.day - b.day; });
+      var steps = [];
+      for (var i = 1; i < detected.length; i++) steps.push(detected[i].x - detected[i - 1].x);
+      steps.sort(function(a, b) { return a - b; });
+      var step = steps[Math.floor(steps.length / 2)];
+      var ref = detected[0];
+      var have = {};
+      for (var i = 0; i < detected.length; i++) have[detected[i].day] = detected[i].x;
+      detected = [];
+      for (var d = 1; d <= 7; d++) {
+        detected.push({ day: d, x: have[d] !== undefined ? have[d] : ref.x + (d - ref.day) * step });
+      }
+    }
+    _dayHeaders = detected;
+    _dayHeaders.sort(function(a, b) { return a.x - b.x; });
+  }
+
   function findDay(el) {
     // 方法1：向上找 data-day / data-weekday 属性（仅这两个属性表示星期）
     var node = el;
@@ -250,38 +322,7 @@ class CquAdapter extends SchoolAdapter {
     }
 
     // 方法2：通过 getBoundingClientRect 匹配日期表头的 x 坐标
-    if (!_dayHeaders) {
-      _dayHeaders = [];
-      // 优先检查常见表头元素，避免全量扫描
-      var headerEls = document.querySelectorAll(
-        'th, [class*="week"], [class*="day"], [class*="header"], [class*="head"]'
-      );
-      if (headerEls.length === 0) {
-        headerEls = document.body.querySelectorAll('*');
-      }
-      for (var i = 0; i < headerEls.length; i++) {
-        var h = headerEls[i];
-        // 只取叶子节点或只有一个文本子节点的元素，避免重复
-        if (h.children.length > 0) continue;
-        var t = (h.textContent || '').trim();
-        var dm = t.match(/^周([一二三四五六日天])$/) || t.match(/^星期([一二三四五六日天])$/);
-        if (dm && dayMap[dm[1]]) {
-          var rect = h.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            var x = rect.left + rect.width / 2;
-            // 去重：避免父子元素都匹配时重复记录同一位置
-            var isDup = false;
-            for (var j = 0; j < _dayHeaders.length; j++) {
-              if (Math.abs(_dayHeaders[j].x - x) < 2) { isDup = true; break; }
-            }
-            if (!isDup) {
-              _dayHeaders.push({ day: dayMap[dm[1]], x: x });
-            }
-          }
-        }
-      }
-      _dayHeaders.sort(function(a, b) { return a.x - b.x; });
-    }
+    if (!_dayHeaders) _prepareDayDetection(filtered);
 
     if (_dayHeaders.length >= 1) {
       var rect = el.getBoundingClientRect();
