@@ -21,8 +21,29 @@ class ScheduleScreen extends ConsumerStatefulWidget {
 }
 
 class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
-  /// 滑动方向：1 = 前进（左滑/下一周），-1 = 后退（右滑/上一周）
-  int _slideDirection = 1;
+  /// 周次分页控制器（页索引 = 周次 - 1）。
+  late PageController _pageController;
+  /// 卡片入场动画：仅首次进入 App 时播放，之后切周走纯滑动。
+  bool _animateCards = true;
+  /// 记录当前学期 id，用于学期切换时重建控制器。
+  String? _lastSemesterId;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController =
+        PageController(initialPage: ref.read(selectedWeekProvider) - 1);
+    // 首帧渲染后关闭卡片入场动画。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _animateCards = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +67,32 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       Future.microtask(
         () => ref.read(widgetServiceProvider).updateTodayWidget(),
       );
+    }
+
+    // 外部周次变化（切学期重置、深链跳转等）时对齐 PageController，防回环。
+    ref.listen<int>(selectedWeekProvider, (prev, next) {
+      if (!_pageController.hasClients) return;
+      final target = next - 1;
+      if ((_pageController.page ?? target).round() != target) {
+        _pageController.jumpToPage(target);
+      }
+    });
+
+    // 学期切换时重建 PageController（totalWeeks/初始周可能变化）。
+    final semesterId = activeSemester.whenOrNull(data: (s) => s?.id);
+    if (semesterId != _lastSemesterId) {
+      final isFirstLoad = _lastSemesterId == null;
+      _lastSemesterId = semesterId;
+      if (!isFirstLoad && semesterId != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final old = _pageController;
+          _pageController = PageController(
+              initialPage: ref.read(selectedWeekProvider) - 1);
+          old.dispose();
+          setState(() {});
+        });
+      }
     }
 
     return Scaffold(
@@ -83,68 +130,64 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           ),
         ],
       ),
-      body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity == null) return;
-          if (details.primaryVelocity! < -300) {
-            setState(() => _slideDirection = 1);
-            ref.read(selectedWeekProvider.notifier).nextWeek(totalWeeks);
-          } else if (details.primaryVelocity! > 300) {
-            setState(() => _slideDirection = -1);
-            ref.read(selectedWeekProvider.notifier).prevWeek();
-          }
-        },
-        child: Column(
-          children: [
-            _WeekSelector(
-              selectedWeek: selectedWeek,
-              totalWeeks: totalWeeks,
-              isCurrentWeek: isCurrentWeek,
-              currentWeek: computedWeek ?? 1,
-              onPrev: () {
-                setState(() => _slideDirection = -1);
-                ref.read(selectedWeekProvider.notifier).prevWeek();
+      body: Column(
+        children: [
+          _WeekSelector(
+            selectedWeek: selectedWeek,
+            totalWeeks: totalWeeks,
+            isCurrentWeek: isCurrentWeek,
+            currentWeek: computedWeek ?? 1,
+            onPrev: () {
+              final target = selectedWeek - 2;
+              if (target >= 0) {
+                _pageController.animateToPage(
+                  target,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            },
+            onNext: () {
+              final target = selectedWeek;
+              if (target < totalWeeks) {
+                _pageController.animateToPage(
+                  target,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            },
+            onJumpToWeek: (week) {
+              _pageController.jumpToPage(week - 1);
+            },
+          ),
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: totalWeeks,
+              allowImplicitScrolling: true,
+              onPageChanged: (index) {
+                final week = index + 1;
+                if (week != selectedWeek) {
+                  ref.read(selectedWeekProvider.notifier)
+                      .goTo(week, totalWeeks: totalWeeks);
+                }
               },
-              onNext: () {
-                setState(() => _slideDirection = 1);
-                ref.read(selectedWeekProvider.notifier).nextWeek(totalWeeks);
-              },
-              onJumpToWeek: (week) {
-                setState(() =>
-                    _slideDirection = week > selectedWeek ? 1 : -1);
-                ref.read(selectedWeekProvider.notifier).goTo(week, totalWeeks: totalWeeks);
+              itemBuilder: (context, index) {
+                final week = index + 1;
+                return RepaintBoundary(
+                  child: WeekView(
+                    key: ValueKey(week),
+                    selectedWeek: week,
+                    animateCards: _animateCards,
+                    onImport: () => context.push('/import'),
+                    onWebViewImport: () => context.push('/import/webview'),
+                  ),
+                );
               },
             ),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeOutCubic,
-                transitionBuilder: (child, animation) {
-                  final offset = _slideDirection == 1
-                      ? Tween<Offset>(
-                          begin: const Offset(1.0, 0.0),
-                          end: Offset.zero,
-                        )
-                      : Tween<Offset>(
-                          begin: const Offset(-1.0, 0.0),
-                          end: Offset.zero,
-                        );
-                  return SlideTransition(
-                    position: offset.animate(animation),
-                    child: child,
-                  );
-                },
-                child: WeekView(
-                  key: ValueKey(selectedWeek),
-                  selectedWeek: selectedWeek,
-                  onImport: () => context.push('/import'),
-                  onWebViewImport: () => context.push('/import/webview'),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/course/edit'),
@@ -303,13 +346,18 @@ class _WeekSelector extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            '第 $selectedWeek / $totalWeeks 周',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              decoration: onJumpToWeek != null
-                                  ? TextDecoration.underline
-                                  : null,
+                          // 周次数字轻 crossfade，避免切周时瞬间跳变
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 150),
+                            child: Text(
+                              '第 $selectedWeek / $totalWeeks 周',
+                              key: ValueKey('$selectedWeek-$totalWeeks'),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                decoration: onJumpToWeek != null
+                                    ? TextDecoration.underline
+                                    : null,
+                              ),
                             ),
                           ),
                           if (onJumpToWeek != null) ...[
