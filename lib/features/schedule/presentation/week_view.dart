@@ -21,12 +21,15 @@ class WeekView extends ConsumerWidget {
   final int selectedWeek;
   final VoidCallback? onImport;
   final VoidCallback? onWebViewImport;
+  /// 是否播放课程卡片入场动画。仅首次进入 App 时 true，切周走纯滑动。
+  final bool animateCards;
 
   const WeekView({
     super.key,
     required this.selectedWeek,
     this.onImport,
     this.onWebViewImport,
+    this.animateCards = true,
   });
 
   static const _dayLabels = ['一', '二', '三', '四', '五', '六', '日'];
@@ -104,6 +107,7 @@ class WeekView extends ConsumerWidget {
                               isToday: isCurrentWeek && day == todayWeekday,
                               courses: byDay[day]!,
                               totalHeight: totalHeight,
+                              animateCards: animateCards,
                               onTapCourse: (course) =>
                                   _showCourseDetail(context, course, sectionTimes),
                               onLongPressCourse: (course) => context.push(
@@ -453,6 +457,7 @@ class _DayColumn extends StatelessWidget {
   final bool isToday;
   final List<Course> courses;
   final double totalHeight;
+  final bool animateCards;
   final void Function(Course) onTapCourse;
   final void Function(Course) onLongPressCourse;
 
@@ -461,6 +466,7 @@ class _DayColumn extends StatelessWidget {
     required this.isToday,
     required this.courses,
     required this.totalHeight,
+    required this.animateCards,
     required this.onTapCourse,
     required this.onLongPressCourse,
   });
@@ -492,6 +498,7 @@ class _DayColumn extends StatelessWidget {
             child: _CourseCard(
               key: ValueKey(c.id),
               course: c,
+              animateCards: animateCards,
               onTap: () => onTapCourse(c),
               onLongPress: () => onLongPressCourse(c),
             ),
@@ -505,11 +512,13 @@ class _DayColumn extends StatelessWidget {
 /// 课程卡片：彩色底 + 白/深色字，课程名最多两行，附教室。
 class _CourseCard extends StatelessWidget {
   final Course course;
+  final bool animateCards;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   const _CourseCard({
     super.key,
     required this.course,
+    required this.animateCards,
     required this.onTap,
     required this.onLongPress,
   });
@@ -522,7 +531,7 @@ class _CourseCard extends StatelessWidget {
         ? Colors.black87
         : Colors.white;
 
-    return Material(
+    final card = Material(
       color: color,
       borderRadius: BorderRadius.circular(10),
       clipBehavior: Clip.antiAlias,
@@ -574,7 +583,10 @@ class _CourseCard extends StatelessWidget {
           ),
         ),
       ),
-    )
+    );
+    // 仅在首次进入时播放入场动画，切周时纯滑动（避免双层动画叠加）。
+    if (!animateCards) return card;
+    return card
         .animate()
         .fadeIn(duration: 280.ms)
         .slideY(begin: 0.08, end: 0, duration: 280.ms, curve: Curves.easeOut);
