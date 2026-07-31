@@ -42,6 +42,9 @@ app.*.map.json
 
 # Generated platform directories (recreate with `flutter create .` using templates in native_templates/)
 /android/
+
+# Gradle caches (may appear inside native_templates/ after local gradle runs)
+native_templates/**/.gradle/
 /ios/
 /linux/
 /macos/
