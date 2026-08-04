@@ -1,5 +1,7 @@
 import 'cqu_adapter.dart';
 import 'jufe_adapter.dart';
+import 'ncu_adapter.dart';
+import 'syuct_adapter.dart';
 
 /// 学校教务系统适配器：定义登录页、课表页 URL 及 JS 提取脚本。
 ///
@@ -92,4 +94,6 @@ class ExtractedCourse {
 final List<SchoolAdapter> schoolAdapters = List.unmodifiable([
   CquAdapter(),
   JufeAdapter(),
+  SyuctAdapter(),
+  NcuAdapter(),
 ]);

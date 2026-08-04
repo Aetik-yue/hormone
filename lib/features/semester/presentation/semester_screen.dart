@@ -32,9 +32,9 @@ class SemesterScreen extends ConsumerWidget {
         data: (semesters) {
           final activeId = activeAsync.whenOrNull(data: (s) => s?.id);
           if (semesters.isEmpty) {
-            return const Center(
+            return Center(
               child: Text('还没有学期，点击右下角添加',
-                  style: TextStyle(color: Colors.grey)),
+                  style: TextStyle(color: Theme.of(context).hintColor)),
             );
           }
           return ListView.separated(
@@ -151,7 +151,7 @@ class _SemesterCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Colors.grey),
+            Icon(Icons.chevron_right, color: theme.hintColor),
           ],
         ),
       ),
@@ -197,6 +197,7 @@ class _SemesterEditSheetState extends ConsumerState<SemesterEditSheet> {
   Widget build(BuildContext context) {
     final semester = ref.watch(semesterFormProvider);
     final isEdit = widget.initial != null;
+    final theme = Theme.of(context);
 
     return Padding(
       padding: EdgeInsets.only(
@@ -214,7 +215,7 @@ class _SemesterEditSheetState extends ConsumerState<SemesterEditSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: theme.dividerColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -332,8 +333,8 @@ class _SemesterEditSheetState extends ConsumerState<SemesterEditSheet> {
                 width: double.infinity,
                 child: TextButton(
                   onPressed: () => _delete(context, ref),
-                  child: const Text('删除学期',
-                      style: TextStyle(color: Colors.red)),
+                  child: Text('删除学期',
+                      style: TextStyle(color: theme.colorScheme.error)),
                 ),
               ),
             const SizedBox(height: 16),

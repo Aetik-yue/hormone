@@ -34,6 +34,9 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   // ── 阶段：select → login → preview ──
   _Phase _phase = _Phase.select;
 
+  /// 导航到课表页后的自动重试次数（frame 内导航不触发 onPageFinished）。
+  int _navRetry = 0;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -306,6 +309,26 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
       if (decoded is String) {
         decoded = jsonDecode(decoded);
       }
+      // 适配器导航/等待信号：已跳转课表页或课表仍在加载，延迟后自动重试
+      if (decoded is Map<String, dynamic>) {
+        if (decoded['__nav'] == true || decoded['__pending'] == true) {
+          setState(() => _extracting = false);
+          if (_navRetry >= 3) {
+            _navRetry = 0;
+            _showNavFailedDialog();
+            return;
+          }
+          _navRetry++;
+          await Future.delayed(
+            decoded['__nav'] == true
+                ? const Duration(seconds: 3)
+                : const Duration(seconds: 2),
+          );
+          if (mounted) return _tryExtract();
+          return;
+        }
+      }
+      _navRetry = 0;
       if (decoded == null) {
         throw Exception('未抓取到课程数据，请确认已进入课表页面后重试');
       }
@@ -398,12 +421,37 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
       });
     } catch (e) {
       setState(() => _extracting = false);
+      // 跳转进行中注入异常（JS 上下文销毁）时静默等待，onPageFinished 会自动重试
+      final currentUrl = await _controller?.currentUrl();
+      if (currentUrl != null && _adapter!.isSchedulePage(currentUrl)) {
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('抓取失败：$e')),
         );
       }
     }
+  }
+
+  /// 自动导航课表页多次仍失败时的提示。
+  void _showNavFailedDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('未能跳转到课表页'),
+        content: const Text(
+          '请确认已成功登录教务系统，并在页面中点击进入「学生个人课表」后，'
+          '再点击右上角「抓取课表」。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showDebugInfo(BuildContext context, String debugStr) {
@@ -473,9 +521,10 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   }
 
   int _autoColor(int index) {
+    // 与课程编辑页一致的柔和马卡龙色板。
     const palette = [
-      0xFF5B8DEF, 0xFF27AE60, 0xFFF2994A, 0xFF9B51E0, 0xFFEB5757,
-      0xFF2D9CDB, 0xFFF2C94C, 0xFF56CCF2, 0xFFBB6BD9, 0xFF6FCF97,
+      0xFF5B8DEF, 0xFF3FBFA8, 0xFFF2A25C, 0xFF9B8AFB, 0xFFEF6E8D,
+      0xFF4FA3E3, 0xFFE8BE50, 0xFF63C98D, 0xFFC08CE8, 0xFFF08C7C,
     ];
     return palette[index % palette.length];
   }

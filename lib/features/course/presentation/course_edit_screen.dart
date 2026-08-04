@@ -9,18 +9,18 @@ import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/settings/application/section_times_provider.dart';
 import 'package:hormone/features/widget/application/widget_service.dart';
 
-/// 卡片可选配色（柔和且彼此区分）。
+/// 卡片可选配色（柔和马卡龙色系，彼此可区分且深浅主题协调）。
 const List<int> _palette = [
   0xFF5B8DEF,
-  0xFF27AE60,
-  0xFFF2994A,
-  0xFF9B51E0,
-  0xFFEB5757,
-  0xFF2D9CDB,
-  0xFFF2C94C,
-  0xFF56CCF2,
-  0xFFBB6BD9,
-  0xFF6FCF97,
+  0xFF3FBFA8,
+  0xFFF2A25C,
+  0xFF9B8AFB,
+  0xFFEF6E8D,
+  0xFF4FA3E3,
+  0xFFE8BE50,
+  0xFF63C98D,
+  0xFFC08CE8,
+  0xFFF08C7C,
 ];
 
 const List<String> _weekdayLabels = [
@@ -388,9 +388,10 @@ class _CourseFormBodyState extends ConsumerState<CourseFormBody> {
           const SizedBox(height: 24),
           TextButton.icon(
             onPressed: () => _delete(context),
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
-            label: const Text('删除课程',
-                style: TextStyle(color: Colors.red)),
+            icon: Icon(Icons.delete_outline,
+                color: Theme.of(context).colorScheme.error),
+            label: Text('删除课程',
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
         ],
         const SizedBox(height: 24),

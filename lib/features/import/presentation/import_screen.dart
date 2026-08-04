@@ -308,7 +308,7 @@ class _DoneView extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.check_circle_outline,
-                size: 72, color: Colors.green),
+                size: 72, color: Color(0xFF34B37E)),
             const SizedBox(height: 24),
             Text('成功导入 $count 门课程', style: theme.textTheme.titleLarge),
             const SizedBox(height: 24),

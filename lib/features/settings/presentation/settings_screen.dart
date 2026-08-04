@@ -1,15 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:hormone/core/constants/app_constants.dart';
 import '../application/theme_mode_provider.dart';
 import '../application/section_times_provider.dart';
 import '../application/export_service.dart';
 
+/// 项目 GitHub 仓库地址（支持我们）。
+const String _githubUrl = 'https://github.com/Aetik-yue/hormone';
+
 /// 设置页：主题切换、节次时间自定义、导入/导出、学期管理入口。
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
+
+  /// 异步读取 App 版本号（如 "1.1.0 (13)"）。
+  static final Future<String> _versionFuture =
+      PackageInfo.fromPlatform().then(
+    (p) => 'v${p.version} (${p.buildNumber})',
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -89,9 +100,49 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _exportData(context, ref),
           ),
+          const Divider(height: 1),
+
+          // ── 关于 ──
+          const _SectionHeader('关于'),
+          ListTile(
+            leading: const Icon(Icons.code),
+            title: const Text('GitHub 仓库'),
+            subtitle: const Text('欢迎 Star 与反馈 Issue，支持项目持续开发'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openGithub(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('版本'),
+            subtitle: FutureBuilder<String>(
+              future: _versionFuture,
+              builder: (context, snap) =>
+                  Text(snap.data ?? '…'),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// 打开 GitHub 仓库页面（外部浏览器）。
+  Future<void> _openGithub(BuildContext context) async {
+    final uri = Uri.parse(_githubUrl);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法打开浏览器，请手动访问：$_githubUrl')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('打开失败：$e')),
+        );
+      }
+    }
   }
 
   void _showSectionTimeEditor(BuildContext context, WidgetRef ref) {
