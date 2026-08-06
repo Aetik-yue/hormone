@@ -117,22 +117,28 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
             ),
             Expanded(
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
+                duration: const Duration(milliseconds: 300),
                 switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
                 transitionBuilder: (child, animation) {
-                  final offset = _slideDirection == 1
-                      ? Tween<Offset>(
-                          begin: const Offset(1.0, 0.0),
-                          end: Offset.zero,
-                        )
-                      : Tween<Offset>(
-                          begin: const Offset(-1.0, 0.0),
-                          end: Offset.zero,
-                        );
-                  return SlideTransition(
-                    position: offset.animate(animation),
-                    child: child,
+                  // 滑入方向跟随手势：下一周从右侧进入，上一周从左侧进入。
+                  // 配合淡入淡出，旧周在滑出前已接近透明，方向感自然。
+                  final dir = _slideDirection.toDouble();
+                  return FadeTransition(
+                    opacity: animation.drive(
+                      Tween<double>(begin: 0.0, end: 1.0)
+                          .chain(CurveTween(curve: Curves.easeOut)),
+                    ),
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: Offset(dir * 0.3, 0.0),
+                        end: Offset.zero,
+                      ).animate(CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      )),
+                      child: child,
+                    ),
                   );
                 },
                 child: WeekView(
