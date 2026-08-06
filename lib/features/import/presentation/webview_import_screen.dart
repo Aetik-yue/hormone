@@ -288,8 +288,10 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.white)
       ..setUserAgent(
-        'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 '
-        '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        // 使用桌面端 UA，确保教务系统返回桌面版课表页面。
+        // 教务系统课表为表格布局，移动版会被压缩错位。
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       );
 
     controller.setNavigationDelegate(
@@ -297,18 +299,9 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         onPageStarted: (_) => setState(() => _loading = true),
         onPageFinished: (url) {
           setState(() => _loading = false);
-          // 注入 viewport 确保移动端正确渲染
-          _controller?.runJavaScript('''
-            (function() {
-              var meta = document.querySelector('meta[name="viewport"]');
-              if (!meta) {
-                meta = document.createElement('meta');
-                meta.name = 'viewport';
-                meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
-                document.head.appendChild(meta);
-              }
-            })();
-          ''');
+          // 不注入 width=device-width 的 viewport：教务系统课表需要桌面宽度渲染，
+          // 强制 device-width 会把表格挤成一团。浏览器默认以 ~980px 桌面宽度渲染
+          // 并缩放适配屏幕，用户可双指缩放查看细节。
           // 检测是否已到达课表页
           if (adapter.isSchedulePage(url)) {
             _tryExtract();
