@@ -13,7 +13,7 @@ import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/widget/application/widget_service.dart';
 import '../data/school_adapter.dart';
 
-/// WebView 教务系统导入页：选学校 → 登录 → 自动抓取 → 预览 → 导入。
+/// WebView 教务系统导入页：选学校 -> 登录 -> 自动抓取 -> 预览 -> 导入。
 class WebviewImportScreen extends ConsumerStatefulWidget {
   const WebviewImportScreen({super.key});
 
@@ -31,7 +31,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   final Set<int> _selectedIndices = {};
   int _skippedCount = 0;
 
-  // ── 阶段：select → login → preview ──
+  // ── 阶段：select -> login -> preview ──
   _Phase _phase = _Phase.select;
 
   /// 导航到课表页后的自动重试次数（frame 内导航不触发 onPageFinished）。
@@ -59,12 +59,12 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             ),
           if (_phase == _Phase.login)
             TextButton(
-              onPressed: _tryExtract,
+              onPressed: _extracting ? null : _tryExtract,
               child: const Text('抓取课表'),
             ),
           if (_phase == _Phase.preview)
             TextButton(
-              onPressed: _importSelected,
+              onPressed: _selectedIndices.isEmpty ? null : _importSelected,
               child: Text('导入 (${_selectedIndices.length})'),
             ),
         ],
@@ -86,28 +86,47 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
   // ── 学校选择 ──
   Widget _buildSchoolSelector() {
+    final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          '选择你的学校',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '将在内置浏览器中打开教务系统，登录后自动抓取课程表。',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 16),
-        ...schoolAdapters.map((adapter) => Card(
-              child: ListTile(
-                leading: const Icon(Icons.school_outlined),
-                title: Text(adapter.schoolName),
-                subtitle: Text(adapter.loginUrl),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _startLogin(adapter),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer.withAlpha((0.3 * 255).round()),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, color: theme.colorScheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '选择学校后将在内置浏览器中打开教务系统，登录后自动抓取课表。',
+                  style: theme.textTheme.bodySmall,
+                ),
               ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text('内置学校', style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w600,
+        )),
+        const SizedBox(height: 8),
+        ...schoolAdapters.map((adapter) => _SchoolCard(
+              adapter: adapter,
+              onTap: () => _startLogin(adapter),
             )),
+        const SizedBox(height: 20),
+        Text('通用', style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w600,
+        )),
+        const SizedBox(height: 8),
+        _CustomUrlCard(onSubmit: (url) {
+          _startLogin(createGenericAdapter(url));
+        }),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -145,92 +164,115 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   Widget _buildPreview() {
     if (_courses.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.search_off, size: 48),
-            const SizedBox(height: 12),
-            Text('未抓取到课程数据',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text('请确认已登录并进入课表页面，然后点击「抓取课表」',
-                style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () => setState(() => _phase = _Phase.login),
-              child: const Text('返回重试'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.search_off, size: 56,
+                  color: Theme.of(context).colorScheme.outline),
+              const SizedBox(height: 16),
+              Text('未抓取到课程数据',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                '请确认已登录并进入课表页面，然后点击右上角「抓取课表」',
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              FilledButton.tonal(
+                onPressed: () => setState(() => _phase = _Phase.login),
+                child: const Text('返回重试'),
+              ),
+            ],
+          ),
         ),
       );
     }
 
+    final theme = Theme.of(context);
+    // 按星期分组
+    final grouped = <int, List<int>>{};
+    for (var i = 0; i < _courses.length; i++) {
+      grouped.putIfAbsent(_courses[i].dayOfWeek, () => []).add(i);
+    }
+    final sortedDays = grouped.keys.toList()..sort();
+
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: theme.colorScheme.surfaceContainerHighest.withAlpha((0.5 * 255).round()),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Text('共抓取 ${_courses.length} 门课程',
-                      style: Theme.of(context).textTheme.bodyMedium),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => setState(() {
-                      if (_selectedIndices.length == _courses.length) {
-                        _selectedIndices.clear();
-                      } else {
-                        _selectedIndices
-                            .addAll(List.generate(_courses.length, (i) => i));
-                      }
-                    }),
-                    child: Text(_selectedIndices.length == _courses.length
-                        ? '取消全选'
-                        : '全选'),
-                  ),
-                ],
-              ),
-              if (_skippedCount > 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    '注意：有 $_skippedCount 门课程无法识别星期，已跳过',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                  ),
+              Text('共 ${_courses.length} 门课程',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  )),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => setState(() {
+                  if (_selectedIndices.length == _courses.length) {
+                    _selectedIndices.clear();
+                  } else {
+                    _selectedIndices
+                        .addAll(List.generate(_courses.length, (i) => i));
+                  }
+                }),
+                icon: Icon(
+                  _selectedIndices.length == _courses.length
+                      ? Icons.deselect
+                      : Icons.select_all,
+                  size: 18,
                 ),
+                label: Text(_selectedIndices.length == _courses.length
+                    ? '取消全选'
+                    : '全选'),
+              ),
             ],
           ),
         ),
-        const Divider(height: 1),
+        if (_skippedCount > 0)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            color: theme.colorScheme.errorContainer.withAlpha((0.3 * 255).round()),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, size: 16,
+                    color: theme.colorScheme.error),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '有 $_skippedCount 门课程无法识别星期，已跳过',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Expanded(
           child: ListView.builder(
-            itemCount: _courses.length,
-            itemBuilder: (context, i) {
-              final c = _courses[i];
-              final selected = _selectedIndices.contains(i);
-              return CheckboxListTile(
-                value: selected,
-                onChanged: (_) => setState(() {
-                  if (selected) {
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: sortedDays.length,
+            itemBuilder: (context, dayIdx) {
+              final day = sortedDays[dayIdx];
+              final indices = grouped[day]!;
+              return _DayGroup(
+                day: day,
+                indices: indices,
+                courses: _courses,
+                selectedIndices: _selectedIndices,
+                onToggle: (i) => setState(() {
+                  if (_selectedIndices.contains(i)) {
                     _selectedIndices.remove(i);
                   } else {
                     _selectedIndices.add(i);
                   }
                 }),
-                title: Text(c.name),
-                subtitle: Text(
-                  '周${_dayLabel(c.dayOfWeek)} 第${c.startSection}-${c.endSection}节'
-                  '${c.location != null ? ' · ${c.location}' : ''}'
-                  '${c.teacher != null ? ' · ${c.teacher}' : ''}',
-                ),
-                secondary: Text(
-                  c.weeks.isEmpty ? '' : '${c.weeks.length}周',
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
               );
             },
           ),
@@ -347,7 +389,6 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         final debugInfo = await _controller!.runJavaScriptReturningResult(r'''
           (function() {
             var info = 'URL: ' + location.href + '\n\n';
-            // 找包含课程编号的元素，输出其 outerHTML
             var els = document.body.querySelectorAll('*');
             var found = false;
             for (var i = 0; i < els.length; i++) {
@@ -515,11 +556,6 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     }
   }
 
-  String _dayLabel(int day) {
-    const labels = ['一', '二', '三', '四', '五', '六', '日'];
-    return day >= 1 && day <= 7 ? labels[day - 1] : '?';
-  }
-
   int _autoColor(int index) {
     // 与课程编辑页一致的柔和马卡龙色板。
     const palette = [
@@ -531,3 +567,278 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 }
 
 enum _Phase { select, login, preview }
+
+/// 学校卡片。
+class _SchoolCard extends StatelessWidget {
+  final SchoolAdapter adapter;
+  final VoidCallback onTap;
+
+  const _SchoolCard({required this.adapter, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withAlpha((0.1 * 255).round()),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.school_outlined,
+                    color: theme.colorScheme.primary, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(adapter.schoolName,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        )),
+                    const SizedBox(height: 2),
+                    Text(
+                      adapter.loginUrl,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: theme.colorScheme.outline),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 自定义 URL 输入卡片。
+class _CustomUrlCard extends StatefulWidget {
+  final void Function(String url) onSubmit;
+
+  const _CustomUrlCard({required this.onSubmit});
+
+  @override
+  State<_CustomUrlCard> createState() => _CustomUrlCardState();
+}
+
+class _CustomUrlCardState extends State<_CustomUrlCard> {
+  final _controller = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.link, color: theme.colorScheme.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Text('自定义教务系统 URL',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      )),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '适用于未列出的学校。输入教务系统网址，登录后点击「抓取课表」。',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _controller,
+                      decoration: const InputDecoration(
+                        hintText: 'https://jwxt.yourschool.edu.cn',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        isDense: true,
+                      ),
+                      keyboardType: TextInputType.url,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return '请输入 URL';
+                        final uri = Uri.tryParse(v.trim());
+                        if (uri == null || !uri.hasScheme) {
+                          return '请输入完整 URL（含 https://）';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () {
+                      if (_formKey.currentState?.validate() ?? false) {
+                        widget.onSubmit(_controller.text.trim());
+                      }
+                    },
+                    child: const Text('打开'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 按星期分组的课程列表。
+class _DayGroup extends StatelessWidget {
+  final int day;
+  final List<int> indices;
+  final List<ExtractedCourse> courses;
+  final Set<int> selectedIndices;
+  final void Function(int index) onToggle;
+
+  const _DayGroup({
+    required this.day,
+    required this.indices,
+    required this.courses,
+    required this.selectedIndices,
+    required this.onToggle,
+  });
+
+  String get _dayLabel {
+    const labels = ['一', '二', '三', '四', '五', '六', '日'];
+    return day >= 1 && day <= 7 ? '周${labels[day - 1]}' : '未知';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(
+            _dayLabel,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        ...indices.map((i) {
+          final c = courses[i];
+          final selected = selectedIndices.contains(i);
+          return _CourseTile(
+            course: c,
+            selected: selected,
+            onTap: () => onToggle(i),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+/// 单条课程预览项。
+class _CourseTile extends StatelessWidget {
+  final ExtractedCourse course;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CourseTile({
+    required this.course,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? theme.colorScheme.primaryContainer.withAlpha((0.3 * 255).round())
+              : theme.colorScheme.surfaceContainerHighest.withAlpha((0.3 * 255).round()),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? theme.colorScheme.primary : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 20,
+              color: selected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(course.name,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      )),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      '第${course.startSection}-${course.endSection}节',
+                      if (course.location != null) course.location!,
+                      if (course.teacher != null) course.teacher!,
+                      if (course.weeks.isNotEmpty)
+                        '${course.weeks.length}周',
+                    ].join('  ·  '),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
