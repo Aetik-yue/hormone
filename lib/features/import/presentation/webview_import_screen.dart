@@ -93,7 +93,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer.withAlpha((0.3 * 255).round()),
+            color: theme.colorScheme.primaryContainer
+                .withAlpha((0.3 * 255).round()),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -110,18 +111,20 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        Text('内置学校', style: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w600,
-        )),
+        Text('内置学校',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            )),
         const SizedBox(height: 8),
         ...schoolAdapters.map((adapter) => _SchoolCard(
               adapter: adapter,
               onTap: () => _startLogin(adapter),
             )),
         const SizedBox(height: 20),
-        Text('通用', style: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w600,
-        )),
+        Text('通用',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            )),
         const SizedBox(height: 8),
         _CustomUrlCard(onSubmit: (url) {
           _startLogin(createGenericAdapter(url));
@@ -169,11 +172,10 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.search_off, size: 56,
-                  color: Theme.of(context).colorScheme.outline),
+              Icon(Icons.search_off,
+                  size: 56, color: Theme.of(context).colorScheme.outline),
               const SizedBox(height: 16),
-              Text('未抓取到课程数据',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text('未抓取到课程数据', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
                 '请确认已登录并进入课表页面，然后点击右上角「抓取课表」',
@@ -203,7 +205,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          color: theme.colorScheme.surfaceContainerHighest.withAlpha((0.5 * 255).round()),
+          color: theme.colorScheme.surfaceContainerHighest
+              .withAlpha((0.5 * 255).round()),
           child: Row(
             children: [
               Text('共 ${_courses.length} 门课程',
@@ -226,9 +229,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
                       : Icons.select_all,
                   size: 18,
                 ),
-                label: Text(_selectedIndices.length == _courses.length
-                    ? '取消全选'
-                    : '全选'),
+                label: Text(
+                    _selectedIndices.length == _courses.length ? '取消全选' : '全选'),
               ),
             ],
           ),
@@ -237,11 +239,12 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            color: theme.colorScheme.errorContainer.withAlpha((0.3 * 255).round()),
+            color:
+                theme.colorScheme.errorContainer.withAlpha((0.3 * 255).round()),
             child: Row(
               children: [
-                Icon(Icons.warning_amber_rounded, size: 16,
-                    color: theme.colorScheme.error),
+                Icon(Icons.warning_amber_rounded,
+                    size: 16, color: theme.colorScheme.error),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -335,8 +338,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
       await Future.delayed(const Duration(seconds: 2));
 
       // 注入 JS 提取课程
-      final result = await _controller!
-          .runJavaScriptReturningResult(_adapter!.extractJs);
+      final result =
+          await _controller!.runJavaScriptReturningResult(_adapter!.extractJs);
 
       var jsonStr = result is String ? result : result.toString();
       // WebView 可能返回双重编码的 JSON（字符串内再包一层字符串）
@@ -359,7 +362,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
                 ? const Duration(seconds: 3)
                 : const Duration(seconds: 2),
           );
-          if (mounted) return _tryExtract();
+          if (mounted) await _tryExtract();
           return;
         }
       }
@@ -371,10 +374,13 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         throw Exception('课表数据格式异常，请确认已进入课表页面后重试');
       }
       final List<dynamic> list = decoded;
-      final allExtracted =
-          list.map((e) => ExtractedCourse.fromJson(e as Map<String, dynamic>)).toList();
+      final allExtracted = list
+          .map((e) => ExtractedCourse.fromJson(e as Map<String, dynamic>))
+          .toList();
       // 过滤掉无法识别星期的课程（dayOfWeek=0 表示 findDay 未能推断）
-      final courses = allExtracted.where((c) => c.dayOfWeek >= 1 && c.dayOfWeek <= 7).toList();
+      final courses = allExtracted
+          .where((c) => c.dayOfWeek >= 1 && c.dayOfWeek <= 7)
+          .toList();
       final skippedCount = allExtracted.length - courses.length;
 
       if (courses.isEmpty) {
@@ -552,8 +558,16 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   int _autoColor(int index) {
     // 与课程编辑页一致的柔和马卡龙色板。
     const palette = [
-      0xFF5B8DEF, 0xFF3FBFA8, 0xFFF2A25C, 0xFF9B8AFB, 0xFFEF6E8D,
-      0xFF4FA3E3, 0xFFE8BE50, 0xFF63C98D, 0xFFC08CE8, 0xFFF08C7C,
+      0xFF5B8DEF,
+      0xFF3FBFA8,
+      0xFFF2A25C,
+      0xFF9B8AFB,
+      0xFFEF6E8D,
+      0xFF4FA3E3,
+      0xFFE8BE50,
+      0xFF63C98D,
+      0xFFC08CE8,
+      0xFFF08C7C,
     ];
     return palette[index % palette.length];
   }
@@ -584,7 +598,8 @@ class _SchoolCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withAlpha((0.1 * 255).round()),
+                  color:
+                      theme.colorScheme.primary.withAlpha((0.1 * 255).round()),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(Icons.school_outlined,
@@ -787,8 +802,10 @@ class _CourseTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: selected
-              ? theme.colorScheme.primaryContainer.withAlpha((0.3 * 255).round())
-              : theme.colorScheme.surfaceContainerHighest.withAlpha((0.3 * 255).round()),
+              ? theme.colorScheme.primaryContainer
+                  .withAlpha((0.3 * 255).round())
+              : theme.colorScheme.surfaceContainerHighest
+                  .withAlpha((0.3 * 255).round()),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: selected ? theme.colorScheme.primary : Colors.transparent,
@@ -819,8 +836,7 @@ class _CourseTile extends StatelessWidget {
                       '第${course.startSection}-${course.endSection}节',
                       if (course.location != null) course.location!,
                       if (course.teacher != null) course.teacher!,
-                      if (course.weeks.isNotEmpty)
-                        '${course.weeks.length}周',
+                      if (course.weeks.isNotEmpty) '${course.weeks.length}周',
                     ].join('  ·  '),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.outline,
