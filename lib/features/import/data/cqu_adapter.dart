@@ -51,17 +51,18 @@ class CquAdapter extends SchoolAdapter {
     candidates.push(el);
   }
 
-  // 去重：如果一个元素是另一个候选元素的子元素，移除子元素
+  // 去重：同一课程文本常同时命中卡片及其多层父容器，只保留最内层元素。
+  // 外层容器可能横跨相邻网格列，使用它的中心坐标会把课程匹配到错误星期。
   var filtered = [];
   for (var i = 0; i < candidates.length; i++) {
-    var isChild = false;
+    var hasMatchingChild = false;
     for (var j = 0; j < candidates.length; j++) {
-      if (i !== j && candidates[j].contains(candidates[i]) && candidates[j] !== candidates[i]) {
-        isChild = true;
+      if (i !== j && candidates[i].contains(candidates[j])) {
+        hasMatchingChild = true;
         break;
       }
     }
-    if (!isChild) {
+    if (!hasMatchingChild) {
       filtered.push(candidates[i]);
     }
   }
@@ -318,7 +319,7 @@ class CquAdapter extends SchoolAdapter {
     }
 
     // ── 位置匹配：找最近表头 ──
-    var method2Result = 0, method2Dist = Infinity;
+    var method2Result = 0, method2Dist = Infinity, matchRadius = 0;
     if (_dayHeaders.length >= 1) {
       var rect = el.getBoundingClientRect();
       // 隐藏元素（display:none 等）返回全零 DOMRect，无法定位
@@ -327,14 +328,21 @@ class CquAdapter extends SchoolAdapter {
       var colWidth = _dayHeaders.length > 1
           ? (_dayHeaders[_dayHeaders.length - 1].x - _dayHeaders[0].x) / (_dayHeaders.length - 1)
           : 100;
-      var matchRadius = colWidth * 0.75;  // 提升半径，容忍更大偏移
+      matchRadius = Math.abs(colWidth) * 0.75;
       var bestDay = 0, bestDist = Infinity;
       for (var i = 0; i < _dayHeaders.length; i++) {
         var dist = Math.abs(_dayHeaders[i].x - cardX);
         if (dist < bestDist) { bestDist = dist; bestDay = _dayHeaders[i].day; }
       }
-      method2Result = bestDay;
-      method2Dist = bestDist;
+      // 只接受落在可信列宽内的匹配。缺失/异常表头时，盲选“最近星期”
+      // 会把课程静默挪到相邻日期；无法可靠判断时返回 0，由预览层跳过并提示。
+      if (bestDist <= matchRadius) {
+        method2Result = bestDay;
+        method2Dist = bestDist;
+      } else {
+        console.log('[CQU] Reject day match: day=' + bestDay +
+          ' dist=' + Math.round(bestDist) + ' radius=' + Math.round(matchRadius));
+      }
     }
 
     // ── 交叉验证：综合两方法结果 ──

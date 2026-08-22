@@ -33,12 +33,13 @@ jobs:
       - name: Create platform projects
         run: flutter create --platforms=android,ios .
 
-      # Apply custom Gradle config (AGP 8.9 compat, NDK, Kotlin 2.2)
+      # Apply custom Gradle config (AGP 8.11 compat, NDK, Kotlin 2.2.20)
       - name: Apply custom Gradle config
         run: |
           NDK_VERSION=$(ls $ANDROID_HOME/ndk/ | sort -V | tail -1)
           sed "s/__NDK_VERSION__/$NDK_VERSION/g" native_templates/android/build.gradle > android/build.gradle
           cp native_templates/android/settings.gradle android/settings.gradle
+          cp native_templates/android/gradle/wrapper/gradle-wrapper.properties android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Get dependencies
         run: flutter pub get
@@ -84,12 +85,13 @@ jobs:
       - name: Create platform projects
         run: flutter create --platforms=android,ios .
 
-      # Apply custom Gradle config (AGP 8.9 compat, NDK, Kotlin 2.2)
+      # Apply custom Gradle config (AGP 8.11 compat, NDK, Kotlin 2.2.20)
       - name: Apply custom Gradle config
         run: |
           NDK_VERSION=$(ls $ANDROID_HOME/ndk/ | sort -V | tail -1)
           sed "s/__NDK_VERSION__/$NDK_VERSION/g" native_templates/android/build.gradle > android/build.gradle
           cp native_templates/android/settings.gradle android/settings.gradle
+          cp native_templates/android/gradle/wrapper/gradle-wrapper.properties android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Get dependencies
         run: flutter pub get

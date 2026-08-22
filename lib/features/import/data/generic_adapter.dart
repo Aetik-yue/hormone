@@ -1,32 +1,33 @@
 import 'school_adapter.dart';
 
-/// 江西财经大学（青果教务 KINGOSOFT）适配器。
+/// 通用教务系统适配器。
 ///
-/// 教务系统：xk.jxufe.cn（青果软件 KINGOSOFT 高校智慧校园教学管理服务平台）
-/// 登录页支持账号登录 + 扫码登录，正常情况免验证码。
-/// 课表页通常为 /student/course/schedule 或 /xsjxgl/xskbcx。
+/// 适用于未单独适配的学校：用户自行输入教务系统 URL，适配器尝试多种
+/// 常见教务系统（金智、青果、URP）的 DOM 结构进行提取。
 ///
-/// 提取策略：
-/// 1. data-属性模式（青果/金智新版通用）
-/// 2. 传统表格模式（行=节次，列=星期）
-/// 两种模式均使用 cell.innerText 文本解析，而非按索引访问子元素，
-/// 避免嵌套 DOM 结构导致索引偏移。
-class JufeAdapter extends SchoolAdapter {
+/// 提取策略按优先级依次尝试：
+/// 1. data-属性模式（金智/青果新版通用）
+/// 2. 传统课表表格（行=节次，列=星期）
+/// 3. 纯文本正则兜底
+class GenericAdapter extends SchoolAdapter {
   @override
-  String get schoolName => '江西财经大学';
+  String get schoolName => '通用教务（自定义URL）';
 
   @override
-  String get loginUrl => 'https://xk.jxufe.cn/';
+  String get loginUrl => _url;
 
   @override
-  String get scheduleUrl =>
-      'https://xk.jxufe.cn/student/course/schedule';
+  String get scheduleUrl => _url;
 
   @override
   bool isSchedulePage(String currentUrl) {
-    return currentUrl.contains('/course/schedule') ||
-        currentUrl.contains('/xsjxgl/xskbcx');
+    // 通用适配器：任何页面都允许尝试提取（用户手动触发）
+    return true;
   }
+
+  final String _url;
+
+  GenericAdapter({required String url}) : _url = url;
 
   @override
   String get extractJs => r'''
@@ -41,7 +42,11 @@ class JufeAdapter extends SchoolAdapter {
               document.querySelector('#wdkbTable') ||
               document.querySelector('table.kbTable') ||
               document.querySelector('.el-table__body') ||
-              document.querySelector('#xsKbTable');
+              document.querySelector('#xsKbTable') ||
+              document.querySelector('.kbTable') ||
+              document.querySelector('[class*="schedule"]') ||
+              document.querySelector('[class*="curriculum"]') ||
+              document.querySelector('[id*="kbTable"]');
 
   if (!table) {
     // 兜底：找 td 最多的 table
@@ -51,10 +56,15 @@ class JufeAdapter extends SchoolAdapter {
       var tdCount = tables[i].querySelectorAll('td').length;
       if (tdCount > maxTd) { maxTd = tdCount; table = tables[i]; }
     }
+    // 仍然没有 table，尝试 div 网格
+    if (!table || maxTd < 10) {
+      table = document.querySelector('.course-grid') ||
+              document.querySelector('[class*="course-grid"]') ||
+              document.body;
+    }
   }
-  if (!table) return JSON.stringify([]);
 
-  // ═══ 策略1：data-属性模式（青果/金智新版） ═══
+  // ═══ 策略1：data-属性模式（金智/青果新版） ═══
   var rows = table.querySelectorAll('tbody tr, tr');
   var hasDataAttrs = false;
   rows.forEach(function(row) {
@@ -65,6 +75,7 @@ class JufeAdapter extends SchoolAdapter {
     rows.forEach(function(row) {
       var day = parseInt(row.getAttribute('data-week') || row.getAttribute('data-day') || '0');
       if (day < 1 || day > 7) {
+        // 兼容 0-indexed
         if (day >= 0 && day <= 6) day = day + 1;
         else return;
       }
@@ -77,7 +88,7 @@ class JufeAdapter extends SchoolAdapter {
         if (beginUnit < 1) return;
         if (endUnit < beginUnit) endUnit = beginUnit;
 
-        // 用 cell.innerText 获取完整文本再解析，避免按索引访问子元素
+        // 用 cell.innerText 获取完整文本，再按行拆分解析
         var cellText = (cell.innerText || cell.textContent || '').trim();
         if (!cellText || cellText.length < 2) return;
 
@@ -99,13 +110,16 @@ class JufeAdapter extends SchoolAdapter {
         });
       });
     });
-  } else {
-    // ═══ 策略2：传统表格模式（行=节次，列=星期） ═══
+  }
+
+  // ═══ 策略2：传统表格（行=节次，列=星期） ═══
+  if (results.length === 0) {
     var allRows = table.querySelectorAll('tr');
-    // 检测表头行确定星期列起始位置
-    var dayColStart = 1;
-    if (allRows.length > 0) {
-      var headerCells = allRows[0].querySelectorAll('th, td');
+    // 先检测表头行，确定星期列的起始位置
+    var dayColStart = 1; // 默认第1列是节次编号，第2-8列是周一到周日
+    var headerRow = allRows.length > 0 ? allRows[0] : null;
+    if (headerRow) {
+      var headerCells = headerRow.querySelectorAll('th, td');
       for (var hi = 0; hi < headerCells.length; hi++) {
         var ht = (headerCells[hi].textContent || '').trim();
         var hdm = ht.match(/周([一二三四五六日天])/) || ht.match(/星期([一二三四五六日天])/);
@@ -122,7 +136,7 @@ class JufeAdapter extends SchoolAdapter {
       for (var c = dayColStart; c < cells.length && c < dayColStart + 7; c++) {
         var dayIdx = c - dayColStart + 1;
         var cellText = cells[c] ? cells[c].textContent.trim() : '';
-        if (!cellText || cellText === ' ' || cellText.length < 2) continue;
+        if (!cellText || cellText === ' ' || cellText.length < 2) continue;
 
         var parsed = parseCellText(cellText);
         if (!parsed.name) continue;
@@ -144,11 +158,62 @@ class JufeAdapter extends SchoolAdapter {
     }
   }
 
+  // ═══ 策略3：纯文本正则兜底 ═══
+  if (results.length === 0) {
+    var bodyText = document.body ? document.body.innerText : '';
+    var lines = bodyText.split(/\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+    var currentDay = 0;
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      // 检测星期标记
+      var dm = line.match(/^周([一二三四五六日天])$/) || line.match(/^星期([一二三四五六日天])$/);
+      if (dm && dayMap[dm[1]]) { currentDay = dayMap[dm[1]]; continue; }
+      if (currentDay === 0) currentDay = 1;
+
+      // 尝试从行中提取课程名+周次+节次
+      // 常见格式：课程名 1-16周 1-2节 教室
+      var courseMatch = line.match(/^(.{2,20}?)\s+([\d,\-–~、单双]+)\s*周\s*([\d,\-–~、]+)\s*节/);
+      if (courseMatch) {
+        var cname = courseMatch[1].trim();
+        var wks = parseWeeks(courseMatch[2] + '周');
+        var secs = parseRange(courseMatch[3]);
+        var startSec = secs.length > 0 ? secs[0] : 1;
+        var endSec = secs.length > 0 ? secs[secs.length - 1] : 1;
+
+        // 教室：节次后面的文本
+        var locMatch = line.match(/节\s*(.+)$/);
+        var loc = locMatch ? locMatch[1].trim() : null;
+        if (loc && loc.length > 30) loc = null;
+
+        var key = cname + '|' + currentDay + '|' + startSec + '|' + (loc || '') + '|' + wks.join(',');
+        if (seen[key]) continue;
+        seen[key] = true;
+
+        results.push({
+          name: cname,
+          teacher: null,
+          location: loc,
+          dayOfWeek: currentDay,
+          startSection: startSec,
+          endSection: endSec,
+          weeks: wks
+        });
+      }
+    }
+  }
+
   return JSON.stringify(results);
 
   // ═══ 工具函数 ═══
 
   function parseCellText(text) {
+    // 尝试从单元格文本中解析课程信息
+    // 常见格式：
+    //   "课程名\n教师\n教室\n1-16周"
+    //   "课程名\n1-16周 1-2节\n教师 教室"
+    //   "课程名 1-16周 1-2节 教室"
     var lines = text.split(/[\n\r]+/).map(function(s) { return s.trim(); }).filter(Boolean);
     if (lines.length === 0) return { name: '', weeks: [], teacher: null, location: null };
 
@@ -188,6 +253,7 @@ class JufeAdapter extends SchoolAdapter {
       }
     }
 
+    // 清理课程名中的括号备注
     if (name) name = name.replace(/\([^)]*\)$/g, '').replace(/（[^）]*）$/g, '').trim();
 
     return { name: name, weeks: weeks, teacher: teacher, location: location };
@@ -222,6 +288,31 @@ class JufeAdapter extends SchoolAdapter {
     weeks = weeks.filter(function(v, i, a) { return a.indexOf(v) === i; });
     weeks.sort(function(a, b) { return a - b; });
     return weeks;
+  }
+
+  function parseRange(text) {
+    if (!text) return [];
+    var nums = [];
+    var parts = text.split(/[,，、\s]+/);
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i].trim();
+      if (!p) continue;
+      var m = p.match(/(\d+)\s*[-–~]\s*(\d+)/);
+      if (m) {
+        var a = parseInt(m[1]), b = parseInt(m[2]);
+        for (var j = a; j <= b; j++) nums.push(j);
+      } else {
+        var n = parseInt(p);
+        if (!isNaN(n)) nums.push(n);
+      }
+    }
+    var unique = [];
+    var seenN = {};
+    for (var i = 0; i < nums.length; i++) {
+      if (!seenN[nums[i]]) { seenN[nums[i]] = true; unique.push(nums[i]); }
+    }
+    unique.sort(function(a, b) { return a - b; });
+    return unique;
   }
 })();
 ''';

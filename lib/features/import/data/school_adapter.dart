@@ -1,7 +1,6 @@
 import 'cqu_adapter.dart';
+import 'generic_adapter.dart';
 import 'jufe_adapter.dart';
-import 'ncu_adapter.dart';
-import 'syuct_adapter.dart';
 
 /// 学校教务系统适配器：定义登录页、课表页 URL 及 JS 提取脚本。
 ///
@@ -40,6 +39,9 @@ abstract class SchoolAdapter {
   /// ]
   /// ```
   String get extractJs;
+
+  /// 是否为内置适配器（非用户自定义）。
+  bool get isBuiltin => true;
 }
 
 /// 从教务系统提取的单门课程（中间模型，尚未入库）。
@@ -47,7 +49,7 @@ class ExtractedCourse {
   final String name;
   final String? teacher;
   final String? location;
-  final int dayOfWeek; // 1-7, 0=未知（无法推断）
+  final int dayOfWeek; // 1-7
   final int startSection;
   final int endSection;
   final List<int> weeks;
@@ -63,16 +65,15 @@ class ExtractedCourse {
   });
 
   factory ExtractedCourse.fromJson(Map<String, dynamic> json) {
-    final dayOfWeek = json['dayOfWeek'] as int? ?? 0;
-    final rawStart = json['startSection'] as int? ?? 1;
-    final rawEnd = json['endSection'] as int? ?? 1;
-    assert(dayOfWeek >= 0 && dayOfWeek <= 7,
+    final dayOfWeek = json['dayOfWeek'] as int? ?? 1;
+    final startSection = json['startSection'] as int? ?? 1;
+    final endSection = json['endSection'] as int? ?? 1;
+    assert(dayOfWeek >= 1 && dayOfWeek <= 7,
         'dayOfWeek out of range: $dayOfWeek');
-    assert(rawStart >= 1 && rawStart <= 20,
-        'startSection out of range: $rawStart');
-    // 确保 startSection <= endSection（release 模式也生效）
-    final startSection = rawStart <= rawEnd ? rawStart : rawEnd;
-    final endSection = rawStart <= rawEnd ? rawEnd : rawStart;
+    assert(startSection >= 1 && startSection <= 20,
+        'startSection out of range: $startSection');
+    assert(endSection >= startSection,
+        'endSection ($endSection) < startSection ($startSection)');
     return ExtractedCourse(
       name: json['name'] as String? ?? '',
       teacher: json['teacher'] as String?,
@@ -80,20 +81,20 @@ class ExtractedCourse {
       dayOfWeek: dayOfWeek,
       startSection: startSection,
       endSection: endSection,
-      weeks: json['weeks'] is List
-              ? (json['weeks'] as List)
-                  .map((e) => e is int ? e : (e is num ? e.toInt() : null))
-                  .whereType<int>()
-                  .toList()
-              : const [],
+      weeks: (json['weeks'] as List<dynamic>?)
+              ?.map((e) => e as int)
+              .toList() ??
+          [],
     );
   }
 }
 
-/// 已注册的学校适配器列表。
+/// 已注册的学校适配器列表（不可变）。
 final List<SchoolAdapter> schoolAdapters = List.unmodifiable([
   CquAdapter(),
   JufeAdapter(),
-  SyuctAdapter(),
-  NcuAdapter(),
 ]);
+
+/// 创建通用适配器（用户自定义 URL）。
+SchoolAdapter createGenericAdapter(String url) =>
+    GenericAdapter(url: url.isEmpty ? 'about:blank' : url);

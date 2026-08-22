@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,8 +9,10 @@ import 'package:hormone/features/settings/application/section_times_provider.dar
 
 /// 每节高度（px）。12 节约 672px，超出屏幕时整体可纵向滚动。
 const double _sectionHeight = 56.0;
+
 /// 卡片与节格之间的留白。
 const double _cardInset = 4.0;
+
 /// 左侧时间轴宽度。
 const double _timeAxisWidth = 48.0;
 
@@ -45,9 +46,8 @@ class WeekView extends ConsumerWidget {
         ref.watch(activeSemesterProvider).valueOrNull?.startDate;
     // 仅当查看的是当前周时，才高亮"今天"所在列（避免查看历史/未来周时
     // 误高亮某一天的日期）。currentWeek>0 防御开学前误判。
-    final currentWeek = semesterStart != null
-        ? computeCurrentWeek(semesterStart, now)
-        : 0;
+    final currentWeek =
+        semesterStart != null ? computeCurrentWeek(semesterStart, now) : 0;
     final isCurrentWeek = currentWeek > 0 && currentWeek == selectedWeek;
 
     return Column(
@@ -60,8 +60,7 @@ class WeekView extends ConsumerWidget {
         ),
         Expanded(
           child: coursesAsync.when(
-            loading: () =>
-                const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('加载失败：$e')),
             data: (allCourses) {
               final weekCourses = allCourses
@@ -104,8 +103,8 @@ class WeekView extends ConsumerWidget {
                               isToday: isCurrentWeek && day == todayWeekday,
                               courses: byDay[day]!,
                               totalHeight: totalHeight,
-                              onTapCourse: (course) =>
-                                  _showCourseDetail(context, course, sectionTimes),
+                              onTapCourse: (course) => _showCourseDetail(
+                                  context, course, sectionTimes),
                               onLongPressCourse: (course) => context.push(
                                 '/course/edit',
                                 extra: course.id,
@@ -125,7 +124,8 @@ class WeekView extends ConsumerWidget {
     );
   }
 
-  void _showCourseDetail(BuildContext context, Course course, Map<int, SectionTime> sectionTimes) {
+  void _showCourseDetail(
+      BuildContext context, Course course, Map<int, SectionTime> sectionTimes) {
     final color = Color(course.colorValue);
     final theme = Theme.of(context);
     showModalBottomSheet(
@@ -243,7 +243,8 @@ class WeekView extends ConsumerWidget {
   }
 
   /// 返回节次对应的时钟时间范围，如 " (08:00-08:45)"。
-  String _formatSectionTime(int startSection, int endSection, Map<int, SectionTime> sectionTimes) {
+  String _formatSectionTime(
+      int startSection, int endSection, Map<int, SectionTime> sectionTimes) {
     final start = sectionTimes[startSection]?.startTime ?? '';
     final end = sectionTimes[endSection]?.endTime ?? '';
     if (start.isEmpty || end.isEmpty) return '';
@@ -275,8 +276,8 @@ class _DetailRow extends StatelessWidget {
             width: 36,
             child: Text(
               label,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.hintColor),
+              style:
+                  theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
             ),
           ),
           Expanded(
@@ -472,15 +473,13 @@ class _DayColumn extends StatelessWidget {
       height: totalHeight,
       decoration: isToday
           ? BoxDecoration(
-              color: theme.colorScheme.primary
-                  .withAlpha((0.06 * 255).round()),
+              color: theme.colorScheme.primary.withAlpha((0.06 * 255).round()),
               borderRadius: BorderRadius.circular(8),
             )
           : null,
       child: Stack(
         children: courses.map((c) {
-          final top =
-              (c.startSection - 1) * _sectionHeight + _cardInset;
+          final top = (c.startSection - 1) * _sectionHeight + _cardInset;
           final height = (c.endSection - c.startSection + 1) * _sectionHeight -
               _cardInset * 2;
           return Positioned(
@@ -517,8 +516,7 @@ class _CourseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Color(course.colorValue);
-    final fg = ThemeData.estimateBrightnessForColor(color) ==
-            Brightness.light
+    final fg = ThemeData.estimateBrightnessForColor(color) == Brightness.light
         ? Colors.black87
         : Colors.white;
 
@@ -544,8 +542,7 @@ class _CourseCard extends StatelessWidget {
                   color: fg,
                 ),
               ),
-              if (course.location != null &&
-                  course.location!.isNotEmpty) ...[
+              if (course.location != null && course.location!.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(
                   course.location!,
@@ -557,8 +554,7 @@ class _CourseCard extends StatelessWidget {
                   ),
                 ),
               ],
-              if (course.teacher != null &&
-                  course.teacher!.isNotEmpty) ...[
+              if (course.teacher != null && course.teacher!.isNotEmpty) ...[
                 const SizedBox(height: 1),
                 Text(
                   course.teacher!,
@@ -574,10 +570,7 @@ class _CourseCard extends StatelessWidget {
           ),
         ),
       ),
-    )
-        .animate()
-        .fadeIn(duration: 280.ms)
-        .slideY(begin: 0.08, end: 0, duration: 280.ms, curve: Curves.easeOut);
+    );
   }
 }
 
@@ -604,19 +597,17 @@ class _EmptyWeekHint extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             hasAnyCourses ? '本周暂无课程' : '尚未导入课程',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(color: theme.hintColor),
+            style:
+                theme.textTheme.titleMedium?.copyWith(color: theme.hintColor),
           ),
           const SizedBox(height: 4),
           Text(
-            hasAnyCourses
-                ? '当前周次没有安排课程\n试试切换到其他周次'
-                : '从教务系统导入或手动添加课程',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.hintColor),
+            hasAnyCourses ? '当前周次没有安排课程\n试试切换到其他周次' : '从教务系统导入或手动添加课程',
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
             textAlign: TextAlign.center,
           ),
-          if (!hasAnyCourses && (onImport != null || onWebViewImport != null)) ...[
+          if (!hasAnyCourses &&
+              (onImport != null || onWebViewImport != null)) ...[
             const SizedBox(height: 16),
             if (onWebViewImport != null)
               FilledButton.icon(
