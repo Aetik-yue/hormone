@@ -21,8 +21,24 @@ class ScheduleScreen extends ConsumerStatefulWidget {
 }
 
 class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
-  /// 滑动方向：1 = 前进（左滑/下一周），-1 = 后退（右滑/上一周）
-  int _slideDirection = 1;
+  /// 周次分页控制器（页索引 = 周次 - 1）。
+  late PageController _pageController;
+
+  /// 记录当前学期 id，用于学期切换时重建控制器。
+  String? _lastSemesterId;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController =
+        PageController(initialPage: ref.read(selectedWeekProvider) - 1);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,14 +54,39 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       data: (s) =>
           s == null ? null : computeCurrentWeek(s.startDate, DateTime.now()),
     );
-    final isCurrentWeek =
-        computedWeek != null && computedWeek == selectedWeek;
+    final isCurrentWeek = computedWeek != null && computedWeek == selectedWeek;
 
     if (!_widgetSynced) {
       _widgetSynced = true;
       Future.microtask(
         () => ref.read(widgetServiceProvider).updateTodayWidget(),
       );
+    }
+
+    // 外部周次变化（切学期重置、深链跳转等）时对齐 PageController，防回环。
+    ref.listen<int>(selectedWeekProvider, (prev, next) {
+      if (!_pageController.hasClients) return;
+      final target = next - 1;
+      if ((_pageController.page ?? target).round() != target) {
+        _pageController.jumpToPage(target);
+      }
+    });
+
+    // 学期切换时重建 PageController（totalWeeks/初始周可能变化）。
+    final semesterId = activeSemester.whenOrNull(data: (s) => s?.id);
+    if (semesterId != _lastSemesterId) {
+      final isFirstLoad = _lastSemesterId == null;
+      _lastSemesterId = semesterId;
+      if (!isFirstLoad && semesterId != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final old = _pageController;
+          _pageController =
+              PageController(initialPage: ref.read(selectedWeekProvider) - 1);
+          old.dispose();
+          setState(() {});
+        });
+      }
     }
 
     return Scaffold(
@@ -83,74 +124,64 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           ),
         ],
       ),
-      body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity == null) return;
-          if (details.primaryVelocity! < -300) {
-            setState(() => _slideDirection = 1);
-            ref.read(selectedWeekProvider.notifier).nextWeek(totalWeeks);
-          } else if (details.primaryVelocity! > 300) {
-            setState(() => _slideDirection = -1);
-            ref.read(selectedWeekProvider.notifier).prevWeek();
-          }
-        },
-        child: Column(
-          children: [
-            _WeekSelector(
-              selectedWeek: selectedWeek,
-              totalWeeks: totalWeeks,
-              isCurrentWeek: isCurrentWeek,
-              currentWeek: computedWeek ?? 1,
-              onPrev: () {
-                setState(() => _slideDirection = -1);
-                ref.read(selectedWeekProvider.notifier).prevWeek();
+      body: Column(
+        children: [
+          _WeekSelector(
+            selectedWeek: selectedWeek,
+            totalWeeks: totalWeeks,
+            isCurrentWeek: isCurrentWeek,
+            currentWeek: computedWeek ?? 1,
+            onPrev: () {
+              final target = selectedWeek - 2;
+              if (target >= 0) {
+                _pageController.animateToPage(
+                  target,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            },
+            onNext: () {
+              final target = selectedWeek;
+              if (target < totalWeeks) {
+                _pageController.animateToPage(
+                  target,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            },
+            onJumpToWeek: (week) {
+              _pageController.jumpToPage(week - 1);
+            },
+          ),
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: totalWeeks,
+              allowImplicitScrolling: true,
+              onPageChanged: (index) {
+                final week = index + 1;
+                if (week != selectedWeek) {
+                  ref
+                      .read(selectedWeekProvider.notifier)
+                      .goTo(week, totalWeeks: totalWeeks);
+                }
               },
-              onNext: () {
-                setState(() => _slideDirection = 1);
-                ref.read(selectedWeekProvider.notifier).nextWeek(totalWeeks);
-              },
-              onJumpToWeek: (week) {
-                setState(() =>
-                    _slideDirection = week > selectedWeek ? 1 : -1);
-                ref.read(selectedWeekProvider.notifier).goTo(week, totalWeeks: totalWeeks);
+              itemBuilder: (context, index) {
+                final week = index + 1;
+                return RepaintBoundary(
+                  child: WeekView(
+                    key: ValueKey(week),
+                    selectedWeek: week,
+                    onImport: () => context.push('/import'),
+                    onWebViewImport: () => context.push('/import/webview'),
+                  ),
+                );
               },
             ),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) {
-                  // 滑入方向跟随手势：下一周从右侧进入，上一周从左侧进入。
-                  // 配合淡入淡出，旧周在滑出前已接近透明，方向感自然。
-                  final dir = _slideDirection.toDouble();
-                  return FadeTransition(
-                    opacity: animation.drive(
-                      Tween<double>(begin: 0.0, end: 1.0)
-                          .chain(CurveTween(curve: Curves.easeOut)),
-                    ),
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: Offset(dir * 0.3, 0.0),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
-                      )),
-                      child: child,
-                    ),
-                  );
-                },
-                child: WeekView(
-                  key: ValueKey(selectedWeek),
-                  selectedWeek: selectedWeek,
-                  onImport: () => context.push('/import'),
-                  onWebViewImport: () => context.push('/import/webview'),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/course/edit'),
@@ -192,8 +223,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [
-                            Text('切换学期',
-                                style: theme.textTheme.titleMedium),
+                            Text('切换学期', style: theme.textTheme.titleMedium),
                             const Spacer(),
                             TextButton.icon(
                               onPressed: () {
@@ -231,17 +261,16 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                           onTap: isActive
                               ? null
                               : () async {
-                                  final repo = ref
-                                      .read(semesterRepositoryProvider);
+                                  final repo =
+                                      ref.read(semesterRepositoryProvider);
                                   await repo.setActive(s.id);
                                   ref.invalidate(activeSemesterProvider);
                                   ref.invalidate(scheduleCoursesProvider);
                                   // 切换学期后重置到当前周
-                                  ref
-                                      .read(selectedWeekProvider.notifier)
-                                      .goTo(computeCurrentWeek(
+                                  ref.read(selectedWeekProvider.notifier).goTo(
+                                      computeCurrentWeek(
                                           s.startDate, DateTime.now()),
-                                          totalWeeks: s.totalWeeks);
+                                      totalWeeks: s.totalWeeks);
                                   ref
                                       .read(widgetServiceProvider)
                                       .updateTodayWidget();
@@ -289,7 +318,8 @@ class _WeekSelector extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: Icon(Icons.chevron_left, size: 20, color: theme.colorScheme.primary),
+            icon: Icon(Icons.chevron_left,
+                size: 20, color: theme.colorScheme.primary),
             visualDensity: VisualDensity.compact,
             onPressed: selectedWeek > 1 ? onPrev : null,
           ),
@@ -309,13 +339,18 @@ class _WeekSelector extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            '第 $selectedWeek / $totalWeeks 周',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              decoration: onJumpToWeek != null
-                                  ? TextDecoration.underline
-                                  : null,
+                          // 周次数字轻 crossfade，避免切周时瞬间跳变
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 150),
+                            child: Text(
+                              '第 $selectedWeek / $totalWeeks 周',
+                              key: ValueKey('$selectedWeek-$totalWeeks'),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                decoration: onJumpToWeek != null
+                                    ? TextDecoration.underline
+                                    : null,
+                              ),
                             ),
                           ),
                           if (onJumpToWeek != null) ...[
@@ -361,7 +396,8 @@ class _WeekSelector extends StatelessWidget {
               child: const Text('本周'),
             ),
           IconButton(
-            icon: Icon(Icons.chevron_right, size: 20, color: theme.colorScheme.primary),
+            icon: Icon(Icons.chevron_right,
+                size: 20, color: theme.colorScheme.primary),
             visualDensity: VisualDensity.compact,
             onPressed: selectedWeek < totalWeeks ? onNext : null,
           ),
@@ -391,8 +427,7 @@ class _WeekSelector extends StatelessWidget {
                 height: 300,
                 child: GridView.builder(
                   padding: const EdgeInsets.all(16),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 5,
                     mainAxisSpacing: 8,
                     crossAxisSpacing: 8,
