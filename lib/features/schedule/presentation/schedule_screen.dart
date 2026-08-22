@@ -24,9 +24,6 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// 周次分页控制器（页索引 = 周次 - 1）。
   late PageController _pageController;
 
-  /// 记录当前学期 id，用于学期切换时重建控制器。
-  String? _lastSemesterId;
-
   @override
   void initState() {
     super.initState();
@@ -63,31 +60,12 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       );
     }
 
-    // 外部周次变化（切学期重置、深链跳转等）时对齐 PageController，防回环。
+    // 外部周次变化（异步首屏定位、切学期、深链跳转等）时对齐分页位置。
+    // 每次 build 后也兜底同步，覆盖 Provider 在 PageView 挂载前完成初始化的竞态。
     ref.listen<int>(selectedWeekProvider, (prev, next) {
-      if (!_pageController.hasClients) return;
-      final target = next - 1;
-      if ((_pageController.page ?? target).round() != target) {
-        _pageController.jumpToPage(target);
-      }
+      _schedulePageSync(next);
     });
-
-    // 学期切换时重建 PageController（totalWeeks/初始周可能变化）。
-    final semesterId = activeSemester.whenOrNull(data: (s) => s?.id);
-    if (semesterId != _lastSemesterId) {
-      final isFirstLoad = _lastSemesterId == null;
-      _lastSemesterId = semesterId;
-      if (!isFirstLoad && semesterId != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final old = _pageController;
-          _pageController =
-              PageController(initialPage: ref.read(selectedWeekProvider) - 1);
-          old.dispose();
-          setState(() {});
-        });
-      }
-    }
+    _schedulePageSync(selectedWeek);
 
     return Scaffold(
       appBar: AppBar(
@@ -189,6 +167,16 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  void _schedulePageSync(int week) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pageController.hasClients) return;
+      final target = week - 1;
+      if ((_pageController.page ?? target).round() != target) {
+        _pageController.jumpToPage(target);
+      }
+    });
   }
 
   void _showSemesterPicker(BuildContext context, WidgetRef ref) {
