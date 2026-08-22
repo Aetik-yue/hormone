@@ -6,8 +6,11 @@ import 'school_adapter.dart';
 /// 登录页支持账号登录 + 扫码登录，正常情况免验证码。
 /// 课表页通常为 /student/course/schedule 或 /xsjxgl/xskbcx。
 ///
-/// 注意：由于没有实际账号验证，extractJs 基于青果教务通用 DOM 结构编写，
-/// 首次实测后可能需要微调选择器。
+/// 提取策略：
+/// 1. data-属性模式（青果/金智新版通用）
+/// 2. 传统表格模式（行=节次，列=星期）
+/// 两种模式均使用 cell.innerText 文本解析，而非按索引访问子元素，
+/// 避免嵌套 DOM 结构导致索引偏移。
 class JufeAdapter extends SchoolAdapter {
   @override
   String get schoolName => '江西财经大学';
@@ -29,41 +32,44 @@ class JufeAdapter extends SchoolAdapter {
   String get extractJs => r'''
 (function() {
   var results = [];
+  var dayMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7};
+  var seen = {};
 
-  // 青果教务课表常见容器：#kbTable, .kb-table, #wdkbTable, table.kbTable
+  // ═══ 找课表容器 ═══
   var table = document.querySelector('#kbTable') ||
               document.querySelector('.kb-table') ||
               document.querySelector('#wdkbTable') ||
               document.querySelector('table.kbTable') ||
-              document.querySelector('.el-table__body');
+              document.querySelector('.el-table__body') ||
+              document.querySelector('#xsKbTable');
 
   if (!table) {
-    // 尝试找任何包含课程信息的大表格
+    // 兜底：找 td 最多的 table
     var tables = document.querySelectorAll('table');
+    var maxTd = 0;
     for (var i = 0; i < tables.length; i++) {
-      if (tables[i].querySelectorAll('td').length > 20) {
-        table = tables[i];
-        break;
-      }
+      var tdCount = tables[i].querySelectorAll('td').length;
+      if (tdCount > maxTd) { maxTd = tdCount; table = tables[i]; }
     }
   }
   if (!table) return JSON.stringify([]);
 
-  // 方式一：data 属性模式（新版青果/金智通用）
+  // ═══ 策略1：data-属性模式（青果/金智新版） ═══
   var rows = table.querySelectorAll('tbody tr, tr');
   var hasDataAttrs = false;
   rows.forEach(function(row) {
-    if (row.getAttribute('data-week')) hasDataAttrs = true;
+    if (row.getAttribute('data-week') || row.getAttribute('data-day')) hasDataAttrs = true;
   });
 
   if (hasDataAttrs) {
     rows.forEach(function(row) {
-      var day = parseInt(row.getAttribute('data-week') || '0');
-      if (day < 1 || day > 7) return;
+      var day = parseInt(row.getAttribute('data-week') || row.getAttribute('data-day') || '0');
+      if (day < 1 || day > 7) {
+        if (day >= 0 && day <= 6) day = day + 1;
+        else return;
+      }
       var cells = row.querySelectorAll('td');
       cells.forEach(function(cell) {
-        var divs = cell.querySelectorAll('div, span, p');
-        if (divs.length < 2) return;
         var beginUnit = parseInt(cell.getAttribute('data-begin-unit') ||
                                  row.getAttribute('data-begin-unit') || '0');
         var endUnit = parseInt(cell.getAttribute('data-end-unit') ||
@@ -71,86 +77,125 @@ class JufeAdapter extends SchoolAdapter {
         if (beginUnit < 1) return;
         if (endUnit < beginUnit) endUnit = beginUnit;
 
-        var weeksText = divs[0] ? divs[0].textContent.trim() : '';
-        var name = divs[1] ? divs[1].textContent.trim() : '';
-        var teacher = divs[2] ? divs[2].textContent.trim() : '';
-        var location = divs[3] ? divs[3].textContent.trim() : '';
-        if (!name) return;
-        name = name.replace(/\([^)]*\)$/g, '').trim();
+        // 用 cell.innerText 获取完整文本再解析，避免按索引访问子元素
+        var cellText = (cell.innerText || cell.textContent || '').trim();
+        if (!cellText || cellText.length < 2) return;
+
+        var parsed = parseCellText(cellText);
+        if (!parsed.name) return;
+
+        var key = parsed.name + '|' + day + '|' + beginUnit + '|' + (parsed.location || '') + '|' + parsed.weeks.join(',');
+        if (seen[key]) return;
+        seen[key] = true;
 
         results.push({
-          name: name,
-          teacher: teacher || null,
-          location: location || null,
+          name: parsed.name,
+          teacher: parsed.teacher || null,
+          location: parsed.location || null,
           dayOfWeek: day,
           startSection: beginUnit,
           endSection: endUnit,
-          weeks: parseWeeks(weeksText)
+          weeks: parsed.weeks
         });
       });
     });
   } else {
-    // 方式二：传统表格模式（行=节次，列=星期）
-    // 青果老版：第一列是节次，后续7列是周一到周日
+    // ═══ 策略2：传统表格模式（行=节次，列=星期） ═══
     var allRows = table.querySelectorAll('tr');
+    // 检测表头行确定星期列起始位置
+    var dayColStart = 1;
+    if (allRows.length > 0) {
+      var headerCells = allRows[0].querySelectorAll('th, td');
+      for (var hi = 0; hi < headerCells.length; hi++) {
+        var ht = (headerCells[hi].textContent || '').trim();
+        var hdm = ht.match(/周([一二三四五六日天])/) || ht.match(/星期([一二三四五六日天])/);
+        if (hdm && dayMap[hdm[1]]) { dayColStart = hi; break; }
+      }
+    }
+
     for (var r = 1; r < allRows.length; r++) {
       var cells = allRows[r].querySelectorAll('td');
       if (cells.length < 2) continue;
-      // 第一列通常是节次编号
       var sectionText = cells[0] ? cells[0].textContent.trim() : '';
       var sectionNum = parseInt(sectionText) || r;
 
-      for (var c = 1; c < cells.length && c <= 7; c++) {
+      for (var c = dayColStart; c < cells.length && c < dayColStart + 7; c++) {
+        var dayIdx = c - dayColStart + 1;
         var cellText = cells[c] ? cells[c].textContent.trim() : '';
-        if (!cellText || cellText === '' || cellText === '\u00a0') continue;
+        if (!cellText || cellText === ' ' || cellText.length < 2) continue;
 
-        // 尝试从单元格文本中解析课程信息
-        // 常见格式："课程名\n教师\n教室\n1-16周"
-        var lines = cellText.split(/[\n\r]+/).map(function(s) { return s.trim(); }).filter(Boolean);
-        if (lines.length < 1) continue;
+        var parsed = parseCellText(cellText);
+        if (!parsed.name) continue;
 
-        var cName = lines[0] || '';
-        var cTeacher = lines.length > 1 ? lines[1] : null;
-        var cLocation = lines.length > 2 ? lines[2] : null;
-        var cWeeksText = lines.length > 3 ? lines[lines.length - 1] : '';
-
-        // 如果只有一行，尝试用分隔符拆分
-        if (lines.length === 1) {
-          var parts = cellText.split(/[,，;；]/);
-          cName = parts[0] || '';
-          cTeacher = parts.length > 1 ? parts[1] : null;
-          cLocation = parts.length > 2 ? parts[2] : null;
-        }
-
-        if (!cName) continue;
-        cName = cName.replace(/\([^)]*\)$/g, '').trim();
+        var key = parsed.name + '|' + dayIdx + '|' + sectionNum + '|' + (parsed.location || '') + '|' + parsed.weeks.join(',');
+        if (seen[key]) continue;
+        seen[key] = true;
 
         results.push({
-          name: cName,
-          teacher: cTeacher,
-          location: cLocation,
-          dayOfWeek: c,
+          name: parsed.name,
+          teacher: parsed.teacher || null,
+          location: parsed.location || null,
+          dayOfWeek: dayIdx,
           startSection: sectionNum,
           endSection: sectionNum,
-          weeks: parseWeeks(cWeeksText)
+          weeks: parsed.weeks
         });
       }
     }
   }
 
-  // 去重
-  var seen = {};
-  var unique = [];
-  results.forEach(function(c) {
-    var key = c.name + '|' + c.dayOfWeek + '|' + c.startSection + '|' + c.weeks.join(',');
-    if (!seen[key]) { seen[key] = true; unique.push(c); }
-  });
-  return JSON.stringify(unique);
+  return JSON.stringify(results);
+
+  // ═══ 工具函数 ═══
+
+  function parseCellText(text) {
+    var lines = text.split(/[\n\r]+/).map(function(s) { return s.trim(); }).filter(Boolean);
+    if (lines.length === 0) return { name: '', weeks: [], teacher: null, location: null };
+
+    var name = '', teacher = null, location = null, weeks = [];
+    var weeksText = '';
+
+    if (lines.length >= 2) {
+      name = lines[0];
+      // 找周次行
+      for (var li = 1; li < lines.length; li++) {
+        if (/\d+.*周/.test(lines[li]) || /单周/.test(lines[li]) || /双周/.test(lines[li])) {
+          weeksText = lines[li];
+          weeks = parseWeeks(weeksText);
+          break;
+        }
+      }
+      // 教师和教室：其余行
+      for (var li = 1; li < lines.length; li++) {
+        if (lines[li] === weeksText) continue;
+        if (!teacher && lines[li].length >= 2 && lines[li].length <= 10 && !/\d+周/.test(lines[li])) {
+          teacher = lines[li];
+        } else if (!location && lines[li].length >= 2 && lines[li].length <= 30) {
+          location = lines[li];
+        }
+      }
+    } else {
+      // 单行：尝试用分隔符拆分
+      var parts = text.split(/[,，;；\s]+/).filter(Boolean);
+      name = parts[0] || '';
+      for (var pi = 1; pi < parts.length; pi++) {
+        if (/\d+.*周/.test(parts[pi]) || /单周/.test(parts[pi]) || /双周/.test(parts[pi])) {
+          weeksText = parts[pi];
+          weeks = parseWeeks(weeksText);
+        } else if (!location && parts[pi].length >= 2) {
+          location = parts[pi];
+        }
+      }
+    }
+
+    if (name) name = name.replace(/\([^)]*\)$/g, '').replace(/（[^）]*）$/g, '').trim();
+
+    return { name: name, weeks: weeks, teacher: teacher, location: location };
+  }
 
   function parseWeeks(text) {
     if (!text) return [];
     var weeks = [];
-    // 支持单周/双周（奇数周/偶数周）
     if (/单周/.test(text)) {
       for (var i = 1; i <= 20; i += 2) weeks.push(i);
       return weeks;

@@ -21,8 +21,21 @@ class ScheduleScreen extends ConsumerStatefulWidget {
 }
 
 class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
-  /// 滑动方向：1 = 前进（左滑/下一周），-1 = 后退（右滑/上一周）
-  int _slideDirection = 1;
+  /// 周次分页控制器（页索引 = 周次 - 1）。
+  late PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController =
+        PageController(initialPage: ref.read(selectedWeekProvider) - 1);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,8 +51,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       data: (s) =>
           s == null ? null : computeCurrentWeek(s.startDate, DateTime.now()),
     );
-    final isCurrentWeek =
-        computedWeek != null && computedWeek == selectedWeek;
+    final isCurrentWeek = computedWeek != null && computedWeek == selectedWeek;
 
     if (!_widgetSynced) {
       _widgetSynced = true;
@@ -47,6 +59,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
         () => ref.read(widgetServiceProvider).updateTodayWidget(),
       );
     }
+
+    // 外部周次变化（异步首屏定位、切学期、深链跳转等）时对齐分页位置。
+    // 每次 build 后也兜底同步，覆盖 Provider 在 PageView 挂载前完成初始化的竞态。
+    ref.listen<int>(selectedWeekProvider, (prev, next) {
+      _schedulePageSync(next);
+    });
+    _schedulePageSync(selectedWeek);
 
     return Scaffold(
       appBar: AppBar(
@@ -83,68 +102,64 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           ),
         ],
       ),
-      body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity == null) return;
-          if (details.primaryVelocity! < -300) {
-            setState(() => _slideDirection = 1);
-            ref.read(selectedWeekProvider.notifier).nextWeek(totalWeeks);
-          } else if (details.primaryVelocity! > 300) {
-            setState(() => _slideDirection = -1);
-            ref.read(selectedWeekProvider.notifier).prevWeek();
-          }
-        },
-        child: Column(
-          children: [
-            _WeekSelector(
-              selectedWeek: selectedWeek,
-              totalWeeks: totalWeeks,
-              isCurrentWeek: isCurrentWeek,
-              currentWeek: computedWeek ?? 1,
-              onPrev: () {
-                setState(() => _slideDirection = -1);
-                ref.read(selectedWeekProvider.notifier).prevWeek();
+      body: Column(
+        children: [
+          _WeekSelector(
+            selectedWeek: selectedWeek,
+            totalWeeks: totalWeeks,
+            isCurrentWeek: isCurrentWeek,
+            currentWeek: computedWeek ?? 1,
+            onPrev: () {
+              final target = selectedWeek - 2;
+              if (target >= 0) {
+                _pageController.animateToPage(
+                  target,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            },
+            onNext: () {
+              final target = selectedWeek;
+              if (target < totalWeeks) {
+                _pageController.animateToPage(
+                  target,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            },
+            onJumpToWeek: (week) {
+              _pageController.jumpToPage(week - 1);
+            },
+          ),
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: totalWeeks,
+              allowImplicitScrolling: true,
+              onPageChanged: (index) {
+                final week = index + 1;
+                if (week != selectedWeek) {
+                  ref
+                      .read(selectedWeekProvider.notifier)
+                      .goTo(week, totalWeeks: totalWeeks);
+                }
               },
-              onNext: () {
-                setState(() => _slideDirection = 1);
-                ref.read(selectedWeekProvider.notifier).nextWeek(totalWeeks);
-              },
-              onJumpToWeek: (week) {
-                setState(() =>
-                    _slideDirection = week > selectedWeek ? 1 : -1);
-                ref.read(selectedWeekProvider.notifier).goTo(week, totalWeeks: totalWeeks);
+              itemBuilder: (context, index) {
+                final week = index + 1;
+                return RepaintBoundary(
+                  child: WeekView(
+                    key: ValueKey(week),
+                    selectedWeek: week,
+                    onImport: () => context.push('/import'),
+                    onWebViewImport: () => context.push('/import/webview'),
+                  ),
+                );
               },
             ),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeOutCubic,
-                transitionBuilder: (child, animation) {
-                  final offset = _slideDirection == 1
-                      ? Tween<Offset>(
-                          begin: const Offset(1.0, 0.0),
-                          end: Offset.zero,
-                        )
-                      : Tween<Offset>(
-                          begin: const Offset(-1.0, 0.0),
-                          end: Offset.zero,
-                        );
-                  return SlideTransition(
-                    position: offset.animate(animation),
-                    child: child,
-                  );
-                },
-                child: WeekView(
-                  key: ValueKey(selectedWeek),
-                  selectedWeek: selectedWeek,
-                  onImport: () => context.push('/import'),
-                  onWebViewImport: () => context.push('/import/webview'),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/course/edit'),
@@ -152,6 +167,16 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  void _schedulePageSync(int week) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pageController.hasClients) return;
+      final target = week - 1;
+      if ((_pageController.page ?? target).round() != target) {
+        _pageController.jumpToPage(target);
+      }
+    });
   }
 
   void _showSemesterPicker(BuildContext context, WidgetRef ref) {
@@ -186,8 +211,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [
-                            Text('切换学期',
-                                style: theme.textTheme.titleMedium),
+                            Text('切换学期', style: theme.textTheme.titleMedium),
                             const Spacer(),
                             TextButton.icon(
                               onPressed: () {
@@ -225,17 +249,16 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                           onTap: isActive
                               ? null
                               : () async {
-                                  final repo = ref
-                                      .read(semesterRepositoryProvider);
+                                  final repo =
+                                      ref.read(semesterRepositoryProvider);
                                   await repo.setActive(s.id);
                                   ref.invalidate(activeSemesterProvider);
                                   ref.invalidate(scheduleCoursesProvider);
                                   // 切换学期后重置到当前周
-                                  ref
-                                      .read(selectedWeekProvider.notifier)
-                                      .goTo(computeCurrentWeek(
+                                  ref.read(selectedWeekProvider.notifier).goTo(
+                                      computeCurrentWeek(
                                           s.startDate, DateTime.now()),
-                                          totalWeeks: s.totalWeeks);
+                                      totalWeeks: s.totalWeeks);
                                   ref
                                       .read(widgetServiceProvider)
                                       .updateTodayWidget();
@@ -283,7 +306,8 @@ class _WeekSelector extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: Icon(Icons.chevron_left, size: 20, color: theme.colorScheme.primary),
+            icon: Icon(Icons.chevron_left,
+                size: 20, color: theme.colorScheme.primary),
             visualDensity: VisualDensity.compact,
             onPressed: selectedWeek > 1 ? onPrev : null,
           ),
@@ -303,13 +327,18 @@ class _WeekSelector extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            '第 $selectedWeek / $totalWeeks 周',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              decoration: onJumpToWeek != null
-                                  ? TextDecoration.underline
-                                  : null,
+                          // 周次数字轻 crossfade，避免切周时瞬间跳变
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 150),
+                            child: Text(
+                              '第 $selectedWeek / $totalWeeks 周',
+                              key: ValueKey('$selectedWeek-$totalWeeks'),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                decoration: onJumpToWeek != null
+                                    ? TextDecoration.underline
+                                    : null,
+                              ),
                             ),
                           ),
                           if (onJumpToWeek != null) ...[
@@ -355,7 +384,8 @@ class _WeekSelector extends StatelessWidget {
               child: const Text('本周'),
             ),
           IconButton(
-            icon: Icon(Icons.chevron_right, size: 20, color: theme.colorScheme.primary),
+            icon: Icon(Icons.chevron_right,
+                size: 20, color: theme.colorScheme.primary),
             visualDensity: VisualDensity.compact,
             onPressed: selectedWeek < totalWeeks ? onNext : null,
           ),
@@ -385,8 +415,7 @@ class _WeekSelector extends StatelessWidget {
                 height: 300,
                 child: GridView.builder(
                   padding: const EdgeInsets.all(16),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 5,
                     mainAxisSpacing: 8,
                     crossAxisSpacing: 8,
