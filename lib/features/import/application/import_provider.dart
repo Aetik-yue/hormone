@@ -138,13 +138,11 @@ class ImportNotifier extends StateNotifier<ImportState> {
 
   void setAllSelected(bool selected) {
     state = state.copyWith(
-      courses: state.courses
-          .map((c) => c._copyWithSelected(selected))
-          .toList(),
+      courses: state.courses.map((c) => c._copyWithSelected(selected)).toList(),
     );
   }
 
-  /// 将勾选的课程批量写入数据库（每条生成新 id）。
+  /// 用勾选的课程替换当前学期课表（每条生成新 id）。
   Future<void> confirmImport() async {
     final toImport = state.courses.where((c) => c.selected).toList();
     if (toImport.isEmpty) return;
@@ -154,13 +152,12 @@ class ImportNotifier extends StateNotifier<ImportState> {
     final repo = _ref.read(courseRepositoryProvider);
 
     state = state.copyWith(status: ImportStatus.importing);
-    var count = 0;
-    for (final c in toImport) {
-      // 每条导入生成独立 id，避免 upsert 时主键碰撞（与课程表单逻辑一致）。
-      final course = c.toCourse(semester.id).copyWith(id: const Uuid().v4());
-      await repo.upsert(course);
-      count++;
-    }
+    final uuid = const Uuid();
+    final replacements = toImport
+        .map((course) => course.toCourse(semester.id).copyWith(id: uuid.v4()))
+        .toList(growable: false);
+    await repo.replaceForSemester(semester.id, replacements);
+    final count = replacements.length;
 
     // 刷新依赖课程数据的上游 Provider。
     _ref.invalidate(scheduleCoursesProvider);
@@ -227,8 +224,7 @@ class ImportNotifier extends StateNotifier<ImportState> {
 
 /// [ImportCourse] 的私有便捷复制（仅翻转 selected），避免对外暴露可变字段。
 extension _ImportCourseCopy on ImportCourse {
-  ImportCourse _copyWithSelected(bool selected) =>
-      ImportCourse(
+  ImportCourse _copyWithSelected(bool selected) => ImportCourse(
         name: name,
         teacher: teacher,
         location: location,

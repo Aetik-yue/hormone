@@ -264,6 +264,17 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             ],
           ),
         ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: theme.colorScheme.secondaryContainer,
+          child: Text(
+            '确认导入后，所选课程将替换当前学期的原有课表。',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
+          ),
+        ),
         if (_skippedCount > 0)
           Container(
             width: double.infinity,
@@ -584,12 +595,13 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     }
 
     final repo = ref.read(courseRepositoryProvider);
-    var count = 0;
+    final uuid = const Uuid();
+    final replacements = <Course>[];
     for (final i in _selectedIndices) {
       final ec = _courses[i];
       if (ec.name.isEmpty || ec.weeks.isEmpty) continue;
-      final course = Course(
-        id: const Uuid().v4(),
+      replacements.add(Course(
+        id: uuid.v4(),
         semesterId: semester.id,
         name: ec.name,
         teacher: ec.teacher,
@@ -598,17 +610,19 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         startSection: ec.startSection,
         endSection: ec.endSection,
         weeks: ec.weeks,
-        colorValue: _autoColor(count),
-      );
-      await repo.upsert(course);
-      count++;
+        colorValue: _autoColor(replacements.length),
+      ));
     }
+
+    if (replacements.isEmpty) return;
+    await repo.replaceForSemester(semester.id, replacements);
+    final count = replacements.length;
 
     ref.read(widgetServiceProvider).updateTodayWidget();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('成功导入 $count 门课程')),
+        SnackBar(content: Text('已用 $count 门课程替换当前课表')),
       );
       context.pop();
     }

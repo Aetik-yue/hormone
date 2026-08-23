@@ -30,8 +30,7 @@ class CourseRepository {
 
   /// 按 id 查询单门课程（编辑页加载已有数据）。
   Future<Course?> getCourse(String id) async {
-    final row = await (_db.select(_db.courses)
-          ..where((c) => c.id.equals(id)))
+    final row = await (_db.select(_db.courses)..where((c) => c.id.equals(id)))
         .getSingleOrNull();
     return row?.toDomain();
   }
@@ -42,9 +41,52 @@ class CourseRepository {
     if (course.id.isEmpty) {
       throw ArgumentError('Course.id must not be empty');
     }
-    await _db
-        .into(_db.courses)
-        .insertOnConflictUpdate(course.toCompanion());
+    await _db.into(_db.courses).insertOnConflictUpdate(course.toCompanion());
+  }
+
+  /// 用 [courses] 原子替换指定学期的全部课程。
+  ///
+  /// 导入课表时不能逐条 upsert：每次导入都会生成新 id，逐条写入只会把新课
+  /// 追加到旧课表中。这里把删除和批量插入放在同一事务内，任何一条写入失败
+  /// 都会回滚，避免用户得到一张只写入了一部分的课表。
+  Future<void> replaceForSemester(
+    String semesterId,
+    Iterable<Course> courses,
+  ) async {
+    if (semesterId.isEmpty) {
+      throw ArgumentError.value(semesterId, 'semesterId', 'must not be empty');
+    }
+
+    final replacements = courses.toList(growable: false);
+    final ids = <String>{};
+    for (final course in replacements) {
+      if (course.id.isEmpty) {
+        throw ArgumentError('Course.id must not be empty');
+      }
+      if (course.semesterId != semesterId) {
+        throw ArgumentError(
+          'Course ${course.id} belongs to semester ${course.semesterId}, '
+          'not $semesterId',
+        );
+      }
+      if (!ids.add(course.id)) {
+        throw ArgumentError('Duplicate course id: ${course.id}');
+      }
+    }
+
+    await _db.transaction(() async {
+      await (_db.delete(_db.courses)
+            ..where((c) => c.semesterId.equals(semesterId)))
+          .go();
+      if (replacements.isNotEmpty) {
+        await _db.batch((batch) {
+          batch.insertAll(
+            _db.courses,
+            replacements.map((course) => course.toCompanion()).toList(),
+          );
+        });
+      }
+    });
   }
 
   Future<void> delete(String id) async {

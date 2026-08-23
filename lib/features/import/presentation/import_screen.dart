@@ -65,7 +65,8 @@ class ImportScreen extends ConsumerWidget {
     if (state.status != ImportStatus.preview) return null;
     final notifier = ref.read(importProvider.notifier);
     return FloatingActionButton.extended(
-      onPressed: state.selectedCount > 0 ? () => notifier.confirmImport() : null,
+      onPressed:
+          state.selectedCount > 0 ? () => notifier.confirmImport() : null,
       icon: const Icon(Icons.download_done),
       label: Text('导入 ${state.selectedCount} 门'),
     );
@@ -152,8 +153,22 @@ class _PreviewList extends ConsumerWidget {
             ],
           ),
         ),
-        if (conflicts.isNotEmpty)
-          _ConflictBanner(names: conflicts),
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '确认后，所选课程将替换当前学期的原有课表。',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
+          ),
+        ),
+        if (conflicts.isNotEmpty) _ConflictBanner(names: conflicts),
         const Divider(height: 1),
         Expanded(
           child: ListView.separated(
@@ -176,8 +191,7 @@ class _PreviewList extends ConsumerWidget {
 
   /// 返回存在时间冲突的已选课程名称集合（用于高亮与提示）。
   Set<String> _conflictNames(ImportState state) {
-    final selected =
-        state.courses.where((c) => c.selected).toList();
+    final selected = state.courses.where((c) => c.selected).toList();
     final names = <String>{};
     for (var i = 0; i < selected.length; i++) {
       for (var j = i + 1; j < selected.length; j++) {
@@ -310,7 +324,7 @@ class _DoneView extends StatelessWidget {
             const Icon(Icons.check_circle_outline,
                 size: 72, color: Color(0xFF34B37E)),
             const SizedBox(height: 24),
-            Text('成功导入 $count 门课程', style: theme.textTheme.titleLarge),
+            Text('已用 $count 门课程替换当前课表', style: theme.textTheme.titleLarge),
             const SizedBox(height: 24),
             FilledButton(onPressed: onDone, child: const Text('完成')),
           ],
@@ -335,8 +349,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline,
-                size: 72, color: theme.colorScheme.error),
+            Icon(Icons.error_outline, size: 72, color: theme.colorScheme.error),
             const SizedBox(height: 24),
             Text('导入失败', style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
