@@ -21,7 +21,6 @@ migrate_working_dir/
 
 # Flutter/Dart/Pub related
 **/doc/api/
-**/ios/Flutter/.last_build_id
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
@@ -40,12 +39,11 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Generated platform directories (recreate with `flutter create .` using templates in native_templates/)
+# Generated Android directory (recreate with `flutter create . --platforms=android`)
 /android/
 
 # Gradle caches (may appear inside native_templates/ after local gradle runs)
 native_templates/**/.gradle/
-/ios/
 /linux/
 /macos/
 /web/

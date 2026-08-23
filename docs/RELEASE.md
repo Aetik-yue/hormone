@@ -1,183 +1,133 @@
-# hormone 发布指南（Phase 8）
+# Hormone Android 发布指南
 
-> 本文档汇总从开发到 App Store / Google Play 上架的关键步骤、签名配置与发布节奏。
+> 本项目只面向 Android。仓库不维护或构建任何 iOS 目标。
 
----
+## 1. 本地开发验证
 
-## 1. 本地开发验证命令
-
-在已安装 Flutter 的机器上，进入项目根目录执行：
+首次克隆后生成 Android 原生工程：
 
 ```bash
-# 1. 生成原生工程（本仓库不保留 android/ios，首次运行时创建）
-flutter create .
-
-# 2. 拉取依赖
+flutter create . --platforms=android
 flutter pub get
-
-# 3. 生成 drift 代码（app_database.g.dart）
 dart run build_runner build --delete-conflicting-outputs
-
-# 4. 生成应用图标与启动屏
-#    源文件位于 assets/icon/icon.png 与 assets/splash/logo.png
 dart run flutter_launcher_icons
 dart run flutter_native_splash:create
-
-# 5. 静态分析与测试
 flutter analyze --fatal-infos --fatal-warnings
 flutter test
-
-# 6. 运行
-flutter run
 ```
 
-> 注：项目采用 **“无原生目录”** 维护方式。`flutter create .` 会生成 `android/`、`ios/` 等目录；`native_templates/` 中保存了桌面小组件的原生模板，需按 `WIDGET_SETUP.md` 手动复制/集成。
+`android/` 是生成目录，不提交到仓库。自定义 Gradle 配置和 Android 小组件
+模板保存在 `native_templates/android/`；小组件接入方式见 `WIDGET_SETUP.md`。
 
----
+## 2. Application ID
 
-## 2. Bundle ID / Application ID
+当前应用包名为 `com.hormone.hormone`。如需修改，在生成后的
+`android/app/build.gradle.kts` 中同步修改：
 
-首次发布前必须替换占位包名。当前为 `com.example.hormone`，请改为自有域名：
+```kotlin
+android {
+    namespace = "com.yourcompany.hormone"
+    defaultConfig {
+        applicationId = "com.yourcompany.hormone"
+    }
+}
+```
 
-- **Android**：`android/app/build.gradle`
-  ```gradle
-  namespace = "com.yourcompany.hormone"
-  applicationId = "com.yourcompany.hormone"
-  ```
-- **iOS**：`ios/Runner.xcodeproj/project.pbxproj` 中的 `PRODUCT_BUNDLE_IDENTIFIER`。
-- 同步修改 `CFBundleIdentifier`（`ios/Runner/Info.plist`）。
+同时修改 `CourseWidgetProvider.kt` 顶部的 Kotlin 包名和对应目录结构。
 
-> 如使用 `change_app_package_name` 包可一键替换：
-> ```bash
-> dart run change_app_package_name:main com.yourcompany.hormone
-> ```
+## 3. 正式签名
 
----
+当前仓库的 release 构建暂时使用 Android Debug 证书，只适合直接安装和测试。
+发布 Google Play 前必须配置长期保存的正式密钥。
 
-## 3. 应用签名
-
-### Android
-
-1. 生成发布密钥（仅一次）：
-   ```bash
-   keytool -genkey -v -keystore ~/hormone-release-key.jks \
-     -keyalg RSA -keysize 2048 -validity 10000 -alias hormone
-   ```
-2. 创建 `android/key.properties`（已加入 `.gitignore`，勿提交）：
-   ```properties
-   storePassword=<密码>
-   keyPassword=<密码>
-   keyAlias=hormone
-   storeFile=../../hormone-release-key.jks
-   ```
-3. 在 `android/app/build.gradle` 中引用 `key.properties` 并启用 `signingConfigs.release`。
-
-### iOS
-
-1. 在 **Xcode → Signing & Capabilities** 中选择 Team。
-2. 设置 Bundle Identifier，勾选 `Automatically manage signing`。
-3. 如需桌面小组件，确保 **App Groups** 能力已启用，group ID 为 `group.hormone`（与 `widget_service.dart` 中一致）。
-
----
-
-## 4. 崩溃监控（可选但推荐）
-
-`pubspec.yaml` 已引入 `sentry_flutter: ^8.0.0`，但当前未初始化。发布前：
-
-1. 在 Sentry 创建项目并获取 **DSN**。
-2. 在 `lib/main.dart` 中包裹 `runApp`：
-   ```dart
-   await SentryFlutter.init(
-     (options) {
-       options.dsn = 'YOUR_DSN_HERE';
-       options.tracesSampleRate = 0.1;
-     },
-     appRunner: () => runApp(const ProviderScope(child: HormoneApp())),
-   );
-   ```
-3. 通过 `dart define` 或环境变量注入 DSN，避免硬编码。
-
----
-
-## 5. 构建产物
-
-### Android
+生成密钥：
 
 ```bash
-flutter build apk --release          # APK
-flutter build appbundle --release    # Google Play 上架用 AAB
+keytool -genkeypair -v \
+  -keystore hormone-release-key.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -alias hormone
+```
+
+创建不提交到 Git 的 `android/key.properties`：
+
+```properties
+storePassword=<密码>
+keyPassword=<密码>
+keyAlias=hormone
+storeFile=<密钥绝对路径或相对路径>
+```
+
+然后在 `android/app/build.gradle.kts` 中创建 `signingConfigs.release` 并让
+`buildTypes.release` 使用该配置。密钥和密码必须离线备份；丢失密钥将无法为
+现有安装用户发布可覆盖升级的版本。
+
+## 4. 构建产物
+
+```bash
+flutter build apk --release
+flutter build appbundle --release
 ```
 
 产物位置：
+
 - APK：`build/app/outputs/flutter-apk/app-release.apk`
 - AAB：`build/app/outputs/bundle/release/app-release.aab`
 
-### iOS
+发布前核对 APK 包内版本和签名：
 
 ```bash
-flutter build ipa --release
+aapt dump badging build/app/outputs/flutter-apk/app-release.apk
+apksigner verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
 ```
 
-产物位置：`build/ios/ipa/hormone.ipa`。需要在 macOS + Xcode 环境下完成归档与分发。
+## 5. Android 桌面小组件
 
----
+按照 `WIDGET_SETUP.md` 将 `native_templates/android/` 中的模板复制到生成的
+Android 工程，并在 `AndroidManifest.xml` 注册 `CourseWidgetProvider`。
 
-## 6. 桌面小组件发布注意事项
+发布前至少验证：
 
-小组件原生代码位于 `native_templates/`，不会随 `flutter create .` 自动生效。上架前：
+- 无课程、本周无课和有多门课程三种状态。
+- App 启动、导入、编辑和删除课程后的小组件刷新。
+- 点击小组件可以正常拉起 App。
+- 深色桌面和不同 Android 版本上的可读性。
 
-1. 按 `WIDGET_SETUP.md` 复制模板到 `ios/Runner/Widgets/` 与 `android/app/src/main/...`。
-2. iOS 在 Xcode 中：File → New → Target → Widget Extension；开启 App Group `group.hormone`。
-3. Android 在 `AndroidManifest.xml` 注册 `CourseWidgetProvider`；`home_widget` 已负责 SharedPreferences 桥接。
-4. 审核截图中应包含至少一张小组件效果图。
+## 6. Google Play 发布
 
----
+1. 登录 [Google Play Console](https://play.google.com/console) 并创建应用。
+2. 填写商店列表，文案与截图计划见 `docs/STORE_LISTING.md`。
+3. 上传使用正式密钥签名的 AAB。
+4. 先经过 Internal testing 和 Closed testing，再逐步发布到 Production。
+5. 检查 Play Console 当前要求的 targetSdk、隐私政策和数据安全表单。
 
-## 7. 商店发布与分阶段 rollout
+## 7. GitHub Release
 
-### Google Play
-
-1. 登录 [Play Console](https://play.google.com/console)，创建应用。
-2. 填写商店列表（见 `docs/STORE_LISTING.md`），上传隐私政策 URL。
-3. 在 **Release → Production → Create new release** 上传 AAB。
-4. 建议：先进行 **Internal testing** → **Closed testing** → **Open testing** → **Production**，按 5% → 20% → 50% → 100% 阶梯放量。
-5. 目标 API：当前 `targetSdk 34`（随 Flutter 版本自动维护）。
-
-### App Store
-
-1. 登录 [App Store Connect](https://appstoreconnect.apple.com)，新建 iOS App。
-2. 填写名称、副标题、描述、关键词、隐私政策等（文案见 `docs/STORE_LISTING.md`）。
-3. 使用 Xcode → Product → Archive → Distribute App 上传。
-4. 在 App Store Connect 中选择构建版本，配置截图（见 `STORE_LISTING.md`）。
-5. 启用 **Phased Release for Automatic Updates**，默认 7 天分阶段推送。
-
----
-
-## 8. 发布前 Checklist
-
-- [ ] `flutter analyze` 无错误、`flutter test` 全部通过。
-- [ ] 包名已替换为自有 Bundle ID。
-- [ ] Android 发布签名已配置，密钥未提交到仓库。
-- [ ] iOS Team、Capability（App Group）已配置。
-- [ ] 图标/启动屏已生成并肉眼检查（各尺寸无白边、无拉伸）。
-- [ ] 深浅主题在真机/模拟器上验证。
-- [ ] 桌面小组件按 `WIDGET_SETUP.md` 集成并验证刷新。
-- [ ] ICS / JSON 导入用真实学校课表测试。
-- [ ] Sentry DSN 已配置（如启用）。
-- [ ] 隐私政策页面可访问。
-- [ ] 截图、宣传文本、关键词已按 `STORE_LISTING.md` 准备。
-
----
-
-## 9. 版本号管理
-
-Flutter 版本号格式：`version: major.minor.patch+buildNumber`
+项目版本号位于 `pubspec.yaml`：
 
 ```yaml
-# pubspec.yaml
-version: 1.0.0+1
+version: major.minor.patch+buildNumber
 ```
 
-- **Android**：`versionCode = buildNumber`，`versionName = major.minor.patch`。
-- **iOS**：`CFBundleShortVersionString = major.minor.patch`，`CFBundleVersion = buildNumber`。
-- 每次上架至少 +1 buildNumber；功能/修复按语义化版本调整 major/minor/patch。
+发布步骤：
+
+1. 更新版本号和 `version/<版本>/更新日志.md`。
+2. 完成代码生成、严格分析、完整测试和 release APK 构建。
+3. 将经过校验的 APK 复制为 `version/<版本>/Hormone.apk`。
+4. 提交并直接同步到 `develop` 和 `main`。
+5. 在 `main` 发布提交上创建 `vX.Y.Z` 标签。
+6. 创建 GitHub Release，并上传 `Hormone.apk`。
+7. 确认 `.github/workflows/release.yml` 的 Android APK、AAB 与产物上传步骤通过。
+
+## 8. 发布 Checklist
+
+- [ ] `pubspec.yaml` 版本号和 build number 已递增。
+- [ ] 更新日志已完成。
+- [ ] `flutter analyze --fatal-infos --fatal-warnings` 通过。
+- [ ] `flutter test` 全部通过。
+- [ ] release APK 和 AAB 构建成功。
+- [ ] APK 包名、版本、最低/目标 API 正确。
+- [ ] APK 签名证书与上一版本一致。
+- [ ] 桌面小组件已在 Android 真机验证。
+- [ ] GitHub Release 资产的大小和 SHA-256 与本地产物一致。
+- [ ] `main`、`develop` 和版本标签指向预期提交。

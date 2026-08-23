@@ -1,6 +1,6 @@
 # hormone 商店元数据
 
-> 为 App Store 与 Google Play 准备的应用名称、文案、关键词及截图策略。
+> 为 Google Play 准备的应用名称、文案、关键词及截图策略。
 > 占位符 `[your-domain]` 请替换为实际官网/隐私政策域名。
 
 ---
@@ -10,7 +10,6 @@
 - **英文主名**：hormone
 - **中文展示名**：hormone 课表
 - **Android 英文（Play Store 标题）**：hormone: Minimal Course Schedule
-- **iOS 英文（App Store 标题）**：hormone Course Schedule
 
 ---
 
@@ -85,7 +84,7 @@ course schedule, college schedule, student timetable, class planner, weekly sche
 
 ## 5. 截图策略
 
-每个商店上传 **5 张手机截图**（推荐尺寸：iOS 6.5" / 5.5"，Android 16:9 或 2:1）。
+Google Play 上传 **5 张手机截图**（推荐尺寸：Android 16:9 或 2:1）。
 
 | 序号 | 画面 | 说明 |
 |---|---|---|
@@ -139,7 +138,6 @@ Contact us at [support@your-domain.com]
 
 ## 8. 分类
 
-- **App Store**：教育（Education） / 效率（Productivity）
 - **Google Play**：教育（Education） / 效率（Productivity）
 
 ---

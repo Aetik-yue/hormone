@@ -12,7 +12,7 @@
 
 | 维度 | 为何 Flutter 更适合本项目 |
 |---|---|
-| 视觉一致性 | 自绘引擎（Skia/Impeller），WakeUp 式极简卡片、时间轴在 iOS/Android 像素级一致，不依赖系统控件 |
+| 视觉一致性 | 自绘引擎（Skia/Impeller），WakeUp 式极简卡片与时间轴在 Android 设备间保持一致 |
 | 动画/手势 | 一等公民动画体系（implicit/explicit animation、Hero、CustomPainter），满足"流畅过渡 + 手势操作" |
 | 主题 | `ThemeData` + Material 3 动态取色，浅色/深色切换成本低 |
 | 性能 | AOT 编译为原生机器码，冷启动与内存可控（目标 <3s / <100MB） |
@@ -29,14 +29,13 @@
 | 状态管理 | **Riverpod** | 编译安全、可测试，适合课程/学期/设置多状态 |
 | 路由 | **go_router** | 声明式路由，支持小组件/快捷方式深链 |
 | 本地存储 | **drift（SQLite）** | 类型安全的关系型数据库，课程/学期关联查询友好 |
-| 桌面小组件 | **home_widget** | 桥接 iOS WidgetKit + Android App Widget，数据由 Flutter 推送 |
+| 桌面小组件 | **home_widget** | 桥接 Android App Widget，数据由 Flutter 推送 |
 | 动画 | **flutter_animate** + 原生 | 轻量声明式动画 |
 | 日历导入 | **icalendar_parser** | 解析 `.ics` 课程日历 |
 | 崩溃/分析 | **Sentry**（或 Firebase Crashlytics） | 崩溃率监控，目标 >99.5% 无崩溃 |
 | 响应式/布局 | 原生 `LayoutBuilder`/`MediaQuery` | 适配手机/平板 |
 
 ### 1.4 目标平台
-- **iOS**：最低 **14.0+**（WidgetKit 要求；建议 15+）
 - **Android**：`minSdk 21`，`targetSdk 34`
 
 ---
@@ -95,7 +94,7 @@ Course {
 | `features/semester` | 学期管理、当前周设置 |
 | `features/import` | ICS / JSON 模板导入；jwxt 解析器接口（Phase 2） |
 | `features/settings` | 浅色/深色主题切换、关于 |
-| `platform/widgets` | home_widget 桥接 + 原生 WidgetKit(SwiftUI)/App Widget(Kotlin) UI |
+| `platform/widgets` | home_widget 桥接 + 原生 Android App Widget（Kotlin）UI |
 | `app/` | main、Provider 装配、go_router 路由 |
 
 ---
@@ -109,7 +108,7 @@ Course {
 - **导入**：
   - MVP：手动录入 + **ICS 日历导入** + JSON 模板导入（纯客户端、无后端）。
   - Phase 2：教务系统（jwxt）导入 —— 见第 8 节风险说明。
-- **桌面小组件**：`home_widget` 推送"当日课程"数据；iOS 用 SwiftUI WidgetKit、Android 用 Kotlin App Widget 渲染；点击跳转 App 对应日期。
+- **桌面小组件**：`home_widget` 推送"当日课程"数据，由 Kotlin App Widget 渲染；点击跳转 App 对应日期。
 - **主题**：浅色/深色 `ThemeData` + Material 3 动态取色；配色参考 WakeUp（柔白底 + 低饱和强调色）。
 
 ---
@@ -124,9 +123,9 @@ Course {
 | P3 课程 CRUD | 增删改查、表单校验、颜色分配、周次多选 UI | 约 1–2 周 |
 | P4 学期管理 | 学期列表、当前学期、当前周自动+手动覆盖、总周数 | 约 1 周 |
 | P5 导入（MVP） | ICS 解析导入、JSON 模板导入、手动录入打磨；jwxt 架构预留 | 约 1–2 周 |
-| P6 小组件 | iOS WidgetKit + Android App Widget + home_widget 桥接，展示当日课程 | 约 2 周 |
+| P6 小组件 | Android App Widget + home_widget 桥接，展示当日课程 | 约 2 周 |
 | P7 打磨与 QA | 动画/手势/响应式（平板）、无障碍、性能（启动/内存）、崩溃上报、真机测试 | 约 1–2 周 |
-| P8 发布 | App Store / Google Play 元数据、截图、分阶段发布、CI/CD | 约 1 周 |
+| P8 发布 | Google Play 元数据、截图、分阶段发布、CI/CD | 约 1 周 |
 
 **合计约 10–14 周**（单人）。可并行压缩（如 P3/P4 与 P2 部分重叠）。
 
@@ -142,8 +141,8 @@ Course {
 
 ## 8. 风险与待确认决策
 
-1. **教务系统（jwxt）导入是最大不确定项**：各高校系统（正方/树维/URP/强智等）差异大、多有反爬/验证码，纯客户端抓取脆弱且 iOS 审核风险高。**稳健做法**是 MVP 先交付"手动 + ICS 日历 + JSON 模板"导入，jwxt 作为 Phase 2 的可插拔解析器（常见做法需轻量后端代理登录与解析）。需在确认时明确范围。
-2. **桌面小组件需原生代码**：iOS（SwiftUI/WidgetKit）、Android（Kotlin App Widget）无法纯 Flutter 实现，届时会涉及原生工程改动。
+1. **教务系统（jwxt）导入是最大不确定项**：各高校系统（正方/树维/URP/强智等）差异大、多有反爬/验证码，纯客户端抓取较脆弱。**稳健做法**是 MVP 先交付"手动 + ICS 日历 + JSON 模板"导入，jwxt 作为 Phase 2 的可插拔解析器（常见做法需轻量后端代理登录与解析）。需在确认时明确范围。
+2. **桌面小组件需原生代码**：Android App Widget 无法纯 Flutter 实现，届时会涉及 Kotlin 与 Android 原生工程改动。
 3. **设计稿**：若已有 WakeUp 式具体设计稿/规范，开发前请提供，可进一步收敛 UI 细节。
 
 ---

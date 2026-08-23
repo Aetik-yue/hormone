@@ -7,17 +7,15 @@ import 'package:hormone/core/models/course.dart';
 import 'package:hormone/core/utils/week_calculator.dart';
 import 'package:hormone/data/providers/database_providers.dart';
 
-/// 桌面小组件（iOS WidgetKit / Android App Widget）的 Dart 桥接层。
+/// Android 桌面小组件的 Dart 桥接层。
 ///
 /// 负责三件事：
-/// 1. 初始化 home_widget 与原生侧的通信通道（App Group / SharedPreferences）。
+/// 1. 初始化 home_widget 与 Android SharedPreferences 的通信通道。
 /// 2. 把「今日课程」序列化为原生侧可读取的键值对并触发 UI 刷新。
 /// 3. 处理小组件点击（默认仅拉起 App；如需深链可在原生侧回传 URI 后扩展）。
 ///
 /// 原生侧模板见仓库 `native_templates/`，整合步骤见 `WIDGET_SETUP.md`。
 class WidgetService {
-  static const _appGroupId = 'group.hormone';
-  static const _iosWidgetName = 'CourseWidget';
   static const _androidWidgetName = 'CourseWidgetProvider';
   static const _keyCourses = 'courses';
   static const _keyTitle = 'widget_title';
@@ -27,17 +25,14 @@ class WidgetService {
 
   WidgetService(this._ref);
 
-  /// 幂等初始化：设置 App Group（iOS）、注册点击回调。
+  /// 幂等初始化并注册小组件点击回调。
   Future<void> _ensureInit() async {
     if (_initialized) return;
     _initialized = true;
-    try {
-      await HomeWidget.setAppGroupId(_appGroupId);
-    } catch (_) {
-      // Android 上 setAppGroupId 为 no-op，忽略。
-    }
     // 冷启动时若由小组件拉起，initiallyLaunchedFromHomeWidget 是 Future；运行期点击则是 Stream。
-    HomeWidget.initiallyLaunchedFromHomeWidget().then(_onWidgetClicked).catchError((_) {});
+    HomeWidget.initiallyLaunchedFromHomeWidget()
+        .then(_onWidgetClicked)
+        .catchError((_) {});
     HomeWidget.widgetClicked.listen(_onWidgetClicked);
   }
 
@@ -74,13 +69,11 @@ class WidgetService {
               })
           .toList();
 
-      final title =
-          currentWeek >= 1 ? '今天 · 第$currentWeek周' : '今天';
+      final title = currentWeek >= 1 ? '今天 · 第$currentWeek周' : '今天';
 
       await HomeWidget.saveWidgetData(_keyTitle, title);
       await HomeWidget.saveWidgetData(_keyCourses, jsonEncode(items));
       await HomeWidget.updateWidget(
-        iOSName: _iosWidgetName,
         androidName: _androidWidgetName,
       );
     } catch (_) {

@@ -4,13 +4,13 @@ This file provides guidance to AI coding agents (Claude Code, Antigravity, etc.)
 
 ## Project
 
-Hormone (课表) — a minimal college course-schedule app for iOS/Android, built with Flutter + Riverpod + go_router + drift. UI strings and most doc comments are in Chinese.
+Hormone (课表) — a minimal Android college course-schedule app built with Flutter + Riverpod + go_router + drift. UI strings and most doc comments are in Chinese. iOS is intentionally unsupported.
 
 ## Commands
 
 ```bash
 flutter pub get                                              # install deps
-flutter create . --platforms=android,ios                     # regenerate platform dirs (see below)
+flutter create . --platforms=android                         # regenerate Android platform dir (see below)
 dart run build_runner build --delete-conflicting-outputs      # codegen: drift + go_router (after changing tables/routes)
 dart run flutter_launcher_icons                              # regenerate app icons (after changing assets/icon/icon.png)
 dart run flutter_native_splash:create                        # regenerate splash screen
@@ -19,12 +19,11 @@ flutter test test/week_calculator_test.dart                  # run a single test
 flutter analyze --fatal-infos --fatal-warnings               # lint — CI gate, must be clean
 flutter build apk --release                                  # Android APK
 flutter build appbundle --release                            # Android AAB
-flutter build ios --release --no-codesign                    # iOS (no signing)
 ```
 
 ### Platform directories are gitignored
 
-`android/`, `ios/`, `macos/`, `windows/`, `linux/`, `web/` are all in `.gitignore`. They are regenerated from the templates in `native_templates/` via `flutter create . --platforms=android,ios` after a fresh clone. Do not commit platform directories. Native widget integration code lives in `native_templates/` and is documented in `WIDGET_SETUP.md`.
+`android/` is gitignored and regenerated via `flutter create . --platforms=android` after a fresh clone. Do not commit generated platform directories. Android widget integration code lives in `native_templates/android/` and is documented in `WIDGET_SETUP.md`.
 
 ### Generated files
 
@@ -72,7 +71,7 @@ go_router, declared once in `app/router.dart`. Screens `context.push` existing r
 
 ## CI
 
-`.github/workflows/ci.yml` runs on push/PR to main: `pub get` → `build_runner` → `flutter analyze --fatal-infos --fatal-warnings` → `flutter test`. Pushing a `v*` tag triggers `.github/workflows/release.yml` (Android APK/AAB + unsigned iOS). Both run on a clean checkout, so generated code is rebuilt in CI — local `*.g.dart` changes won't be committed.
+`.github/workflows/ci.yml` runs on push/PR to main: `pub get` → `build_runner` → `flutter analyze --fatal-infos --fatal-warnings` → `flutter test`. Pushing a `v*` tag triggers `.github/workflows/release.yml` to build Android APK/AAB. Both run on a clean checkout, so generated code is rebuilt in CI — local `*.g.dart` changes won't be committed.
 
 ## Branch Strategy
 

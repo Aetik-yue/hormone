@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Flutter](https://img.shields.io/badge/Flutter-3.5+-02569B.svg)](https://flutter.dev)
 
-一款简洁、轻量的大学课程表 App，支持 iOS 和 Android。
+一款简洁、轻量的 Android 大学课程表 App。
 
 ## 截图
 
@@ -49,7 +49,7 @@
 
 ### 数据管理
 - **导出备份**：一键导出全部学期和课程为 JSON 文件
-- **桌面小组件**：显示今日课程（iOS WidgetKit / Android App Widget）
+- **桌面小组件**：通过 Android App Widget 显示今日课程
 
 ## 技术栈
 
@@ -94,7 +94,7 @@ lib/
 
 - Flutter SDK >= 3.3.0
 - Dart SDK >= 3.3.0
-- Android Studio / Xcode（用于平台开发）
+- Android Studio（包含 Android SDK 与 JDK）
 
 ### 快速开始
 
@@ -106,8 +106,8 @@ cd hormone
 # 安装依赖
 flutter pub get
 
-# 生成平台目录（android/、ios/ 等已排除出版本控制）
-flutter create . --platforms=android,ios
+# 生成 Android 平台目录（android/ 已排除出版本控制）
+flutter create . --platforms=android
 
 # 运行
 flutter run
@@ -153,12 +153,6 @@ APK 输出至 `build/app/outputs/flutter-apk/app-release.apk`。
 
 ```bash
 flutter build appbundle --release
-```
-
-### iOS
-
-```bash
-flutter build ios --release --no-codesign
 ```
 
 ## 适配新学校

@@ -29,9 +29,9 @@ jobs:
           cache: true
 
       # This repo is maintained without generated platform directories.
-      # Recreate both platforms in CI (flutter_launcher_icons generates for both).
+      # Recreate the Android project in CI.
       - name: Create platform projects
-        run: flutter create --platforms=android,ios .
+        run: flutter create --platforms=android .
 
       # Apply custom Gradle config (AGP 8.11 compat, NDK, Kotlin 2.2.20)
       - name: Apply custom Gradle config
@@ -66,51 +66,4 @@ jobs:
           path: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
-
-  build-ios:
-    name: Build iOS Release (no codesign)
-    runs-on: macos-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@f2c4f6686ca8e8d6e6d0f28410eeef506ed66aff # v2.18.0
-        with:
-          channel: stable
-          cache: true
-
-      - name: Create platform projects
-        run: flutter create --platforms=android,ios .
-
-      # Apply custom Gradle config (AGP 8.11 compat, NDK, Kotlin 2.2.20)
-      - name: Apply custom Gradle config
-        run: |
-          NDK_VERSION=$(ls $ANDROID_HOME/ndk/ | sort -V | tail -1)
-          sed "s/__NDK_VERSION__/$NDK_VERSION/g" native_templates/android/build.gradle > android/build.gradle
-          cp native_templates/android/settings.gradle android/settings.gradle
-          cp native_templates/android/gradle/wrapper/gradle-wrapper.properties android/gradle/wrapper/gradle-wrapper.properties
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Generate drift code
-        run: dart run build_runner build --delete-conflicting-outputs
-
-      - name: Generate launcher icons
-        run: dart run flutter_launcher_icons
-
-      - name: Generate splash screen
-        run: dart run flutter_native_splash:create
-
-      - name: Build iOS (unsigned)
-        run: flutter build ios --release --no-codesign
-
-      - name: Upload iOS artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-release-${{ github.ref_name }}
-          path: build/ios/iphoneos/Runner.app
           if-no-files-found: error

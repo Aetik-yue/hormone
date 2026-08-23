@@ -323,7 +323,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   }
 }
 
-/// 更轻、更快收敛的分页弹簧，同时保留 Android/iOS 一致的边界回弹。
+/// 更轻、更快收敛的分页弹簧，并在 Android 上保留自然的边界回弹。
 class _SchedulePagePhysics extends PageScrollPhysics {
   const _SchedulePagePhysics({super.parent});
 

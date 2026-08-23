@@ -16,14 +16,14 @@ Phase 8（发布阶段）已完成，主要包含应用图标、启动屏、商�
 
 3. **CI/CD 工作流**
    - `.github/workflows/ci.yml`：每次 push/PR 自动 `flutter pub get` → `build_runner` → `flutter analyze` → `flutter test`。
-   - `.github/workflows/release.yml`：推送 `v*` 标签时自动构建 Android APK/AAB，并在 macOS runner 上构建 iOS（无签名）。
+   - `.github/workflows/release.yml`：推送 `v*` 标签时自动构建 Android APK/AAB。
 
 4. **发布文档**
    - `docs/RELEASE.md`：本地验证命令、Bundle ID 替换、签名、构建命令、上架流程、发布 Checklist。
    - `docs/STORE_LISTING.md`：中英文应用名称、副标题、描述、关键词、截图策略、隐私政策模板。
 
 5. **仓库基础**
-   - 新增 `.gitignore`（Flutter 标准 + 忽略 `android/`/`ios/` 等由 `flutter create .` 生成的目录）。
+   - 新增 `.gitignore`（Flutter 标准 + 忽略由 `flutter create . --platforms=android` 生成的 `android/` 目录）。
 
 ## 验证状态
 
