@@ -137,12 +137,13 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   // ── WebView 登录 ──
   Widget _buildWebView() {
     if (_controller == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
     return Stack(
       children: [
         WebViewWidget(controller: _controller!),
         if (_loading || _extracting)
           Container(
-            color: Colors.black26,
+            color: theme.colorScheme.scrim.withAlpha(74),
             child: Center(
               child: Card(
                 child: Padding(
@@ -287,9 +288,10 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   // ── 逻辑 ──
 
   void _startLogin(SchoolAdapter adapter) {
+    final backgroundColor = Theme.of(context).colorScheme.surface;
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
+      ..setBackgroundColor(backgroundColor)
       ..setUserAgent(
         // 使用桌面端 UA，确保教务系统返回桌面版课表页面。
         // 教务系统课表为表格布局，移动版会被压缩错位。

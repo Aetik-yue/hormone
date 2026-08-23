@@ -110,34 +110,28 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
             isCurrentWeek: isCurrentWeek,
             currentWeek: computedWeek ?? 1,
             onPrev: () {
-              final target = selectedWeek - 2;
-              if (target >= 0) {
-                _pageController.animateToPage(
-                  target,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutCubic,
-                );
-              }
+              _animateToWeek(selectedWeek - 1, totalWeeks);
             },
             onNext: () {
-              final target = selectedWeek;
-              if (target < totalWeeks) {
-                _pageController.animateToPage(
-                  target,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutCubic,
-                );
-              }
+              _animateToWeek(selectedWeek + 1, totalWeeks);
             },
             onJumpToWeek: (week) {
-              _pageController.jumpToPage(week - 1);
+              _animateToWeek(week, totalWeeks);
             },
+          ),
+          _WeekProgressIndicator(
+            controller: _pageController,
+            selectedWeek: selectedWeek,
+            totalWeeks: totalWeeks,
           ),
           Expanded(
             child: PageView.builder(
               controller: _pageController,
               itemCount: totalWeeks,
               allowImplicitScrolling: true,
+              physics: const _SchedulePagePhysics(
+                parent: BouncingScrollPhysics(),
+              ),
               onPageChanged: (index) {
                 final week = index + 1;
                 if (week != selectedWeek) {
@@ -148,13 +142,36 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
               },
               itemBuilder: (context, index) {
                 final week = index + 1;
-                return RepaintBoundary(
+                final page = RepaintBoundary(
                   child: WeekView(
                     key: ValueKey(week),
                     selectedWeek: week,
                     onImport: () => context.push('/import'),
                     onWebViewImport: () => context.push('/import/webview'),
                   ),
+                );
+                // 只让轻量的合成层随手势变化，WeekView 本身作为 child 不会
+                // 每帧重建；轻微缩放与透明度差形成更自然的前后页交接。
+                return AnimatedBuilder(
+                  animation: _pageController,
+                  child: page,
+                  builder: (context, child) {
+                    var currentPage = index.toDouble();
+                    if (_pageController.hasClients &&
+                        _pageController.position.hasContentDimensions) {
+                      currentPage = _pageController.page ?? currentPage;
+                    }
+                    final distance =
+                        (currentPage - index).abs().clamp(0.0, 1.0).toDouble();
+                    return Transform.scale(
+                      scale: 1 - distance * 0.012,
+                      alignment: Alignment.center,
+                      child: Opacity(
+                        opacity: 1 - distance * 0.08,
+                        child: child,
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -177,6 +194,33 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
         _pageController.jumpToPage(target);
       }
     });
+  }
+
+  /// 所有显式跳周都使用同一套动画；距离越远动画略长，但设置上限避免拖沓。
+  /// 系统要求减少动态效果时直接跳转，尊重无障碍偏好。
+  void _animateToWeek(int week, int totalWeeks) {
+    final safeWeek = week.clamp(1, totalWeeks);
+    final targetPage = safeWeek - 1;
+    if (!_pageController.hasClients ||
+        MediaQuery.of(context).disableAnimations) {
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(targetPage);
+      } else {
+        ref
+            .read(selectedWeekProvider.notifier)
+            .goTo(safeWeek, totalWeeks: totalWeeks);
+      }
+      return;
+    }
+
+    final currentPage = _pageController.page ?? (safeWeek - 1).toDouble();
+    final distance =
+        (currentPage - targetPage).abs().ceil().clamp(1, 4).toInt();
+    _pageController.animateToPage(
+      targetPage,
+      duration: Duration(milliseconds: 220 + distance * 45),
+      curve: Curves.easeOutQuint,
+    );
   }
 
   void _showSemesterPicker(BuildContext context, WidgetRef ref) {
@@ -275,6 +319,78 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           },
         );
       },
+    );
+  }
+}
+
+/// 更轻、更快收敛的分页弹簧，同时保留 Android/iOS 一致的边界回弹。
+class _SchedulePagePhysics extends PageScrollPhysics {
+  const _SchedulePagePhysics({super.parent});
+
+  @override
+  SpringDescription get spring => const SpringDescription(
+        mass: 0.82,
+        stiffness: 240,
+        damping: 28,
+      );
+
+  @override
+  _SchedulePagePhysics applyTo(ScrollPhysics? ancestor) {
+    return _SchedulePagePhysics(parent: buildParent(ancestor));
+  }
+}
+
+/// 与 PageController 逐帧联动的学期进度线，手指移动多少，进度就移动多少。
+class _WeekProgressIndicator extends StatelessWidget {
+  final PageController controller;
+  final int selectedWeek;
+  final int totalWeeks;
+
+  const _WeekProgressIndicator({
+    required this.controller,
+    required this.selectedWeek,
+    required this.totalWeeks,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(999),
+        child: SizedBox(
+          height: 3,
+          child: AnimatedBuilder(
+            animation: controller,
+            builder: (context, _) {
+              var page = (selectedWeek - 1).toDouble();
+              if (controller.hasClients &&
+                  controller.position.hasContentDimensions) {
+                page = controller.page ?? page;
+              }
+              final progress = totalWeeks <= 1
+                  ? 1.0
+                  : ((page + 1) / totalWeeks).clamp(0.0, 1.0).toDouble();
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(
+                    color: theme.colorScheme.outlineVariant.withAlpha(105),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: progress,
+                      child: ColoredBox(color: theme.colorScheme.primary),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 }

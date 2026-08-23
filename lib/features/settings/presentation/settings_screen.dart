@@ -17,8 +17,7 @@ class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   /// 异步读取 App 版本号（如 "1.1.0 (13)"）。
-  static final Future<String> _versionFuture =
-      PackageInfo.fromPlatform().then(
+  static final Future<String> _versionFuture = PackageInfo.fromPlatform().then(
     (p) => 'v${p.version} (${p.buildNumber})',
   );
 
@@ -37,23 +36,11 @@ class SettingsScreen extends ConsumerWidget {
         children: [
           // ── 外观 ──
           const _SectionHeader('外观'),
-          ListTile(
-            leading: const Icon(Icons.palette_outlined),
-            title: const Text('主题'),
-            subtitle: const Text('浅色 / 深色 / 跟随系统'),
-            trailing: DropdownButton<ThemeMode>(
-              value: mode,
-              onChanged: (m) =>
-                  ref.read(themeModeProvider.notifier).setThemeMode(m!),
-              items: const [
-                DropdownMenuItem(
-                    value: ThemeMode.system, child: Text('跟随系统')),
-                DropdownMenuItem(value: ThemeMode.light, child: Text('浅色')),
-                DropdownMenuItem(value: ThemeMode.dark, child: Text('深色')),
-              ],
-            ),
+          _AppearanceCard(
+            mode: mode,
+            onChanged: (next) =>
+                ref.read(themeModeProvider.notifier).setThemeMode(next),
           ),
-          const Divider(height: 1),
 
           // ── 学期 ──
           const _SectionHeader('学期'),
@@ -116,8 +103,7 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('版本'),
             subtitle: FutureBuilder<String>(
               future: _versionFuture,
-              builder: (context, snap) =>
-                  Text(snap.data ?? '…'),
+              builder: (context, snap) => Text(snap.data ?? '…'),
             ),
           ),
         ],
@@ -188,6 +174,98 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
+/// 主题模式使用直接可见的分段按钮，避免把最常用的外观选项藏进下拉菜单。
+class _AppearanceCard extends StatelessWidget {
+  final ThemeMode mode;
+  final ValueChanged<ThemeMode> onChanged;
+
+  const _AppearanceCard({
+    required this.mode,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final effectiveBrightness = theme.brightness;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(
+                    effectiveBrightness == Brightness.dark
+                        ? Icons.dark_mode_rounded
+                        : Icons.light_mode_rounded,
+                    size: 20,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('显示模式', style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 2),
+                      Text(
+                        mode == ThemeMode.system
+                            ? '当前跟随系统使用${effectiveBrightness == Brightness.dark ? '深色' : '浅色'}模式'
+                            : mode == ThemeMode.dark
+                                ? '降低夜间使用时的屏幕眩光'
+                                : '明亮清晰，适合日间查看课表',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<ThemeMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: ThemeMode.system,
+                    icon: Icon(Icons.brightness_auto_outlined, size: 18),
+                    label: Text('系统'),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.light,
+                    icon: Icon(Icons.light_mode_outlined, size: 18),
+                    label: Text('浅色'),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.dark,
+                    icon: Icon(Icons.dark_mode_outlined, size: 18),
+                    label: Text('深色'),
+                  ),
+                ],
+                selected: {mode},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) => onChanged(selection.first),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// 可选的课时时长（分钟）。
 const _durationOptions = [30, 35, 40, 45, 50, 60, 90, 120];
 
@@ -196,8 +274,7 @@ class _SectionTimeEditor extends ConsumerStatefulWidget {
   const _SectionTimeEditor();
 
   @override
-  ConsumerState<_SectionTimeEditor> createState() =>
-      _SectionTimeEditorState();
+  ConsumerState<_SectionTimeEditor> createState() => _SectionTimeEditorState();
 }
 
 class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
@@ -246,8 +323,8 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
                       AppConstants.defaultSectionDuration;
                   final endTime = sectionTime?.endTime ?? '';
                   return Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: Row(
                       children: [
                         SizedBox(
@@ -274,7 +351,9 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
                         ),
                         const SizedBox(width: 8),
                         DropdownButton<int>(
-                          value: _durationOptions.contains(duration) ? duration : null,
+                          value: _durationOptions.contains(duration)
+                              ? duration
+                              : null,
                           items: _durationOptions
                               .map((d) => DropdownMenuItem(
                                     value: d,
@@ -330,9 +409,7 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
     if (picked != null) {
       final timeStr =
           '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-      ref
-          .read(sectionTimesProvider.notifier)
-          .setSectionStart(section, timeStr);
+      ref.read(sectionTimesProvider.notifier).setSectionStart(section, timeStr);
     }
   }
 

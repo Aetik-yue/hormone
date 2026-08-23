@@ -469,33 +469,64 @@ class _DayColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final gridColor = theme.colorScheme.outlineVariant.withAlpha(
+      theme.brightness == Brightness.dark ? 76 : 92,
+    );
+    final sectionCount = (totalHeight / _sectionHeight).round();
     return Container(
       height: totalHeight,
-      decoration: isToday
-          ? BoxDecoration(
-              color: theme.colorScheme.primary.withAlpha((0.06 * 255).round()),
-              borderRadius: BorderRadius.circular(8),
-            )
-          : null,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: isToday
+            ? theme.colorScheme.primary.withAlpha(
+                theme.brightness == Brightness.dark ? 24 : 15,
+              )
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        border: Border(left: BorderSide(color: gridColor, width: 0.6)),
+      ),
       child: Stack(
-        children: courses.map((c) {
-          final top = (c.startSection - 1) * _sectionHeight + _cardInset;
-          final height = (c.endSection - c.startSection + 1) * _sectionHeight -
-              _cardInset * 2;
-          return Positioned(
-            key: ValueKey(c.id),
-            top: top,
-            left: _cardInset,
-            right: _cardInset,
-            height: height,
-            child: _CourseCard(
-              key: ValueKey(c.id),
-              course: c,
-              onTap: () => onTapCourse(c),
-              onLongPress: () => onLongPressCourse(c),
+        children: [
+          // 课表网格是信息结构而不是装饰：横线对应节次，竖线对应星期。
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Column(
+                children: List.generate(
+                  sectionCount,
+                  (_) => SizedBox(
+                    height: _sectionHeight,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(color: gridColor, width: 0.6),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          );
-        }).toList(),
+          ),
+          ...courses.map((c) {
+            final top = (c.startSection - 1) * _sectionHeight + _cardInset;
+            final height =
+                (c.endSection - c.startSection + 1) * _sectionHeight -
+                    _cardInset * 2;
+            return Positioned(
+              key: ValueKey(c.id),
+              top: top,
+              left: _cardInset,
+              right: _cardInset,
+              height: height,
+              child: _CourseCard(
+                key: ValueKey(c.id),
+                course: c,
+                onTap: () => onTapCourse(c),
+                onLongPress: () => onLongPressCourse(c),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
