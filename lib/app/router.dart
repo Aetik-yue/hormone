@@ -4,6 +4,7 @@ import 'package:hormone/features/schedule/presentation/schedule_screen.dart';
 import 'package:hormone/features/course/presentation/course_edit_screen.dart';
 import 'package:hormone/features/semester/presentation/semester_screen.dart';
 import 'package:hormone/features/import/presentation/import_screen.dart';
+import 'package:hormone/features/import/presentation/course_capture_guide_screen.dart';
 import 'package:hormone/features/import/presentation/webview_import_screen.dart';
 import 'package:hormone/features/settings/presentation/settings_screen.dart';
 
@@ -16,8 +17,8 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/course/edit',
-      builder: (context, state) =>
-          CourseEditScreen(courseId: state.extra is String ? state.extra as String : null),
+      builder: (context, state) => CourseEditScreen(
+          courseId: state.extra is String ? state.extra as String : null),
     ),
     GoRoute(
       path: '/semester',
@@ -26,6 +27,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/import',
       builder: (context, state) => const ImportScreen(),
+    ),
+    GoRoute(
+      path: '/import/guide',
+      builder: (context, state) => const CourseCaptureGuideScreen(),
     ),
     GoRoute(
       path: '/import/webview',

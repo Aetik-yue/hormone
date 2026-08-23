@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -9,13 +10,19 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'package:hormone/core/models/course.dart';
 import 'package:hormone/data/providers/database_providers.dart';
+import 'package:hormone/features/import/application/course_capture_orientation.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/widget/application/widget_service.dart';
 import '../data/school_adapter.dart';
 
 /// WebView 教务系统导入页：选学校 -> 登录 -> 自动抓取 -> 预览 -> 导入。
 class WebviewImportScreen extends ConsumerStatefulWidget {
-  const WebviewImportScreen({super.key});
+  final CourseCaptureOrientationController? orientationController;
+
+  const WebviewImportScreen({
+    super.key,
+    this.orientationController,
+  });
 
   @override
   ConsumerState<WebviewImportScreen> createState() =>
@@ -23,6 +30,7 @@ class WebviewImportScreen extends ConsumerStatefulWidget {
 }
 
 class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
+  late final CourseCaptureOrientationController _orientationController;
   SchoolAdapter? _adapter;
   WebViewController? _controller;
   bool _loading = true;
@@ -38,6 +46,19 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   int _navRetry = 0;
 
   @override
+  void initState() {
+    super.initState();
+    _orientationController =
+        widget.orientationController ?? CourseCaptureOrientationController();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_orientationController.leaveCaptureMode());
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -51,6 +72,11 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
           onPressed: () => context.pop(),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline_rounded),
+            tooltip: '课程抓取说明',
+            onPressed: () => context.push('/import/guide'),
+          ),
           if (_phase == _Phase.login)
             IconButton(
               icon: const Icon(Icons.refresh),
@@ -103,7 +129,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '选择学校后将在内置浏览器中打开教务系统，登录后自动抓取课表。',
+                  '登录与抓取时会自动切换横屏，保证七天课表列位置稳定；完成后自动恢复竖屏。',
                   style: theme.textTheme.bodySmall,
                 ),
               ),
@@ -116,10 +142,12 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
               fontWeight: FontWeight.w600,
             )),
         const SizedBox(height: 8),
-        ...schoolAdapters.map((adapter) => _SchoolCard(
-              adapter: adapter,
-              onTap: () => _startLogin(adapter),
-            )),
+        ...schoolAdapters.map(
+          (adapter) => _SchoolCard(
+            adapter: adapter,
+            onTap: () => unawaited(_startLogin(adapter)),
+          ),
+        ),
         const SizedBox(height: 20),
         Text('通用',
             style: theme.textTheme.titleSmall?.copyWith(
@@ -127,7 +155,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             )),
         const SizedBox(height: 8),
         _CustomUrlCard(onSubmit: (url) {
-          _startLogin(createGenericAdapter(url));
+          unawaited(_startLogin(createGenericAdapter(url)));
         }),
         const SizedBox(height: 24),
       ],
@@ -287,7 +315,24 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
   // ── 逻辑 ──
 
-  void _startLogin(SchoolAdapter adapter) {
+  Future<void> _startLogin(SchoolAdapter adapter) async {
+    final landscapeReady = await _orientationController.enterCaptureMode();
+    if (!mounted) return;
+    if (!landscapeReady) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法自动切换横屏，请手动将手机旋转为横屏后再抓取')),
+      );
+    } else {
+      // 等待 Android 完成 Activity 尺寸变更，再创建 WebView，避免它保留竖屏视口。
+      final layoutChanged = await _waitForLandscapeLayout();
+      if (!mounted) return;
+      if (!layoutChanged) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('屏幕尚未切换为横屏，请手动旋转手机后再抓取')),
+        );
+      }
+    }
+
     final backgroundColor = Theme.of(context).colorScheme.surface;
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -328,6 +373,16 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
       _controller = controller;
       _phase = _Phase.login;
     });
+  }
+
+  Future<bool> _waitForLandscapeLayout() async {
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (!mounted) return false;
+      final size = MediaQuery.sizeOf(context);
+      if (size.width > size.height) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    return false;
   }
 
   Future<void> _tryExtract() async {
@@ -453,6 +508,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         return;
       }
 
+      await _orientationController.leaveCaptureMode();
+      if (!mounted) return;
       setState(() {
         _courses = courses;
         _skippedCount = skippedCount;
@@ -620,7 +677,8 @@ class _SchoolCard extends StatelessWidget {
                     Text(
                       adapter.loginUrl,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -628,7 +686,10 @@ class _SchoolCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: theme.colorScheme.outline),
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ],
           ),
         ),
@@ -683,7 +744,7 @@ class _CustomUrlCardState extends State<_CustomUrlCard> {
               Text(
                 '适用于未列出的学校。输入教务系统网址，登录后点击「抓取课表」。',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 12),
@@ -841,7 +902,8 @@ class _CourseTile extends StatelessWidget {
                       if (course.weeks.isNotEmpty) '${course.weeks.length}周',
                     ].join('  ·  '),
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],

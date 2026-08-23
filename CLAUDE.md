@@ -36,7 +36,7 @@ Feature-first layering under `lib/`:
 - `core/` — persistence-free domain: `models/` (`Course`, `Semester`), `constants/`, `theme/`, pure `utils/` (`week_calculator.dart`).
 - `data/` — drift persistence: `tables/` (drift `Table` defs), `repositories/` (domain-typed data access), `mappers.dart`, `providers/`, and `app_database.dart`.
 - `features/` — feature modules, each with `application/` (Riverpod providers) + `presentation/` (screens) + optionally `data/`/`domain/`: `schedule`, `course`, `semester`, `import`, `settings`, `widget`.
-- `app/router.dart` — go_router route table (6 routes).
+- `app/router.dart` — go_router route table (7 routes).
 
 ### Riverpod provider chain
 

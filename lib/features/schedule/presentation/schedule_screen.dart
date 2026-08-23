@@ -97,7 +97,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
         centerTitle: false,
         actions: [
           IconButton(
+            icon: const Icon(Icons.help_outline_rounded),
+            tooltip: '课程抓取说明',
+            onPressed: () => context.push('/import/guide'),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings_outlined),
+            tooltip: '设置',
             onPressed: () => context.push('/settings'),
           ),
         ],

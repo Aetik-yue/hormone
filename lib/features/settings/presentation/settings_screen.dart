@@ -67,6 +67,13 @@ class SettingsScreen extends ConsumerWidget {
           // ── 数据 ──
           const _SectionHeader('数据'),
           ListTile(
+            leading: const Icon(Icons.menu_book_outlined),
+            title: const Text('课程抓取使用说明'),
+            subtitle: const Text('查看从登录教务系统到导入课程的完整步骤'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/import/guide'),
+          ),
+          ListTile(
             leading: const Icon(Icons.school_outlined),
             title: const Text('从教务系统导入'),
             subtitle: const Text('登录学校教务系统，一键抓取课表'),

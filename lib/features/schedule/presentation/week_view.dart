@@ -518,7 +518,7 @@ class _DayColumn extends StatelessWidget {
               left: _cardInset,
               right: _cardInset,
               height: height,
-              child: _CourseCard(
+              child: CourseCard(
                 key: ValueKey(c.id),
                 course: c,
                 onTap: () => onTapCourse(c),
@@ -532,12 +532,12 @@ class _DayColumn extends StatelessWidget {
   }
 }
 
-/// 课程卡片：彩色底 + 白/深色字，课程名最多两行，附教室。
-class _CourseCard extends StatelessWidget {
+/// 课程卡片：窄列自适应留白和行数，优先展示课程名，再按高度展示教室/教师。
+class CourseCard extends StatelessWidget {
   final Course course;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
-  const _CourseCard({
+  const CourseCard({
     super.key,
     required this.course,
     required this.onTap,
@@ -547,9 +547,7 @@ class _CourseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Color(course.colorValue);
-    final fg = ThemeData.estimateBrightnessForColor(color) == Brightness.light
-        ? Colors.black87
-        : Colors.white;
+    final fg = courseCardForegroundColor(color);
 
     return Material(
       color: color,
@@ -558,51 +556,100 @@ class _CourseCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                course.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: fg,
-                ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compactWidth = constraints.maxWidth < 56;
+            final showLocation = constraints.maxHeight >= 64 &&
+                course.location != null &&
+                course.location!.isNotEmpty;
+            final showTeacher = constraints.maxHeight >= 92 &&
+                course.teacher != null &&
+                course.teacher!.isNotEmpty;
+            final fontSize = compactWidth ? 10.5 : 11.5;
+            final detailHeight =
+                (showLocation ? 14.0 : 0) + (showTeacher ? 13.0 : 0);
+            final titleHeight = constraints.maxHeight - 8 - detailHeight;
+            final titleLines =
+                (titleHeight / (fontSize * 1.08)).floor().clamp(1, 4);
+
+            return Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: compactWidth ? 3 : 5,
+                vertical: 4,
               ),
-              if (course.location != null && course.location!.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  course.location!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: fg.withAlpha((0.78 * 255).round()),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Text(
+                        course.name,
+                        key: const Key('course-card-name'),
+                        maxLines: titleLines,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: fontSize,
+                          height: 1.08,
+                          letterSpacing: compactWidth ? -0.35 : -0.15,
+                          fontWeight: FontWeight.w700,
+                          color: fg,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ],
-              if (course.teacher != null && course.teacher!.isNotEmpty) ...[
-                const SizedBox(height: 1),
-                Text(
-                  course.teacher!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: fg.withAlpha((0.65 * 255).round()),
-                  ),
-                ),
-              ],
-            ],
-          ),
+                  if (showLocation)
+                    Text(
+                      course.location!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compactWidth ? 9 : 9.5,
+                        height: 1.15,
+                        fontWeight: FontWeight.w500,
+                        color: fg,
+                      ),
+                    ),
+                  if (showTeacher)
+                    Text(
+                      course.teacher!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compactWidth ? 8.5 : 9,
+                        height: 1.15,
+                        fontWeight: FontWeight.w500,
+                        color: fg,
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
   }
+}
+
+/// 在深色墨水和白色之间选择对比度更高的课程卡片前景色。
+Color courseCardForegroundColor(Color background) {
+  const darkInk = Color(0xFF101522);
+  const lightInk = Colors.white;
+  final backgroundLuminance = background.computeLuminance();
+
+  double contrast(Color foreground) {
+    final foregroundLuminance = foreground.computeLuminance();
+    final lighter = foregroundLuminance > backgroundLuminance
+        ? foregroundLuminance
+        : backgroundLuminance;
+    final darker = foregroundLuminance > backgroundLuminance
+        ? backgroundLuminance
+        : foregroundLuminance;
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  return contrast(darkInk) >= contrast(lightInk) ? darkInk : lightInk;
 }
 
 /// 无课程时的友好空状态。区分"无任何课程"和"本周无课"。
