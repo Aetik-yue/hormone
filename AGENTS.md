@@ -80,8 +80,8 @@ Default branch: `develop` (active development). `main` = production-ready releas
 
 | Branch | Purpose | Lifecycle |
 |--------|---------|-----------|
-| `main` | Stable release code | Permanent, protected |
-| `develop` | Daily integration | Permanent, protected |
+| `main` | Stable release code | Permanent, direct push after local verification |
+| `develop` | Daily integration | Permanent, direct push after local verification |
 | `feature/xxx` | New feature | Temporary, delete after merge |
 | `fix/xxx` | Bug fix | Temporary, delete after merge |
 | `release/vX.Y.Z` | Release preparation | Temporary |
@@ -107,9 +107,11 @@ Types: `feat` · `fix` · `docs` · `chore` · `refactor` · `test`
 
 ### Workflow
 
-1. New branch from `develop`: `git checkout -b feature/xxx develop`
-2. Develop + commit + push
-3. Open PR → `develop` (requires 1 approval + CI pass)
-4. After merge, delete the feature branch
-5. To release: create `release/vX.Y.Z` from `develop` → fix bugs, bump version → PR to `main` + `develop`, tag `vX.Y.Z`
-6. Hotfix: branch from `main` → fix → PR to `main` + `develop`
+This is a personal project. Do not open PRs unless the user explicitly asks for one or
+GitHub branch protection makes a direct push impossible.
+
+1. Work directly on `develop` for ordinary features and fixes, or use a temporary branch when isolation is useful.
+2. Run code generation, strict analysis, and the full test suite before committing.
+3. Commit and push directly to `develop`.
+4. To release: prepare and verify the release, update `main` and `develop` directly, then tag `vX.Y.Z` and publish the GitHub Release.
+5. Hotfixes start from `main`, are verified locally, then are pushed directly to both `main` and `develop`.
