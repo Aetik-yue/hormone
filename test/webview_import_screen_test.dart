@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:hormone/core/theme/app_theme.dart';
@@ -9,8 +10,11 @@ import 'package:hormone/features/import/presentation/webview_import_screen.dart'
 
 void main() {
   testWidgets('学校 URL 与说明文字使用可读的正文弱化色', (tester) async {
+    final orientationCalls = <List<DeviceOrientation>>[];
     final orientationController = CourseCaptureOrientationController(
-      setPreferredOrientations: (_) async {},
+      setPreferredOrientations: (orientations) async {
+        orientationCalls.add(List.of(orientations));
+      },
     );
     await tester.pumpWidget(
       ProviderScope(
@@ -32,6 +36,11 @@ void main() {
     expect(urlText.style?.color, expectedColor);
     expect(urlText.style?.fontWeight, FontWeight.w500);
     expect(customDescription.style?.color, expectedColor);
+    expect(
+      find.text('登录和浏览保持竖屏；点击抓取时会短暂切换横屏，保证七天课表列位置稳定。'),
+      findsOneWidget,
+    );
+    expect(orientationCalls, isEmpty);
     expect(tester.takeException(), isNull);
   });
 }

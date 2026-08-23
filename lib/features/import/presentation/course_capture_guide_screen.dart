@@ -21,7 +21,7 @@ class CourseCaptureGuideScreen extends StatelessWidget {
     _GuideStep(
       icon: Icons.login_rounded,
       title: '登录教务系统',
-      description: '内置浏览器会自动切换为横屏。验证码、短信验证或统一身份认证需要按学校页面提示手动完成。',
+      description: '内置浏览器会保持竖屏。验证码、短信验证或统一身份认证需要按学校页面提示手动完成。',
     ),
     _GuideStep(
       icon: Icons.calendar_view_week_outlined,
@@ -176,7 +176,7 @@ class _PreparationCard extends StatelessWidget {
             ),
             Divider(height: 17),
             _ChecklistItem(
-              text: '抓取期间保持横屏，课程预览时会自动恢复竖屏',
+              text: '只有执行抓取时会短暂横屏，登录、浏览和课程预览均保持竖屏',
             ),
           ],
         ),

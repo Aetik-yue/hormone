@@ -37,6 +37,10 @@ void main() {
     expect(find.text('登录教务系统'), findsOneWidget);
     expect(find.text('打开个人课表'), findsOneWidget);
     expect(find.text('抓取、核对并导入'), findsOneWidget);
+    expect(
+      find.text('只有执行抓取时会短暂横屏，登录、浏览和课程预览均保持竖屏'),
+      findsOneWidget,
+    );
 
     await tester.drag(find.byType(ListView), const Offset(0, -900));
     await tester.pumpAndSettle();

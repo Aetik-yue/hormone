@@ -7,8 +7,8 @@ typedef PreferredOrientationsSetter = Future<void> Function(
 /// 课程抓取阶段的屏幕方向控制器。
 ///
 /// 教务课表通常按桌面七列表格渲染，竖屏下响应式布局会改变课程卡片和星期
-/// 表头的横坐标。抓取脚本依赖这些坐标判断星期，因此登录和抓取阶段固定横屏，
-/// 进入预览或离开页面时恢复竖屏。
+/// 表头的横坐标。抓取脚本依赖这些坐标判断星期，因此仅在执行抓取脚本时
+/// 临时固定横屏；登录、浏览、预览和离开页面时均使用竖屏。
 class CourseCaptureOrientationController {
   final PreferredOrientationsSetter _setPreferredOrientations;
   bool _landscapeRequested = false;

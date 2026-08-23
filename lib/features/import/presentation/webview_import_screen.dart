@@ -129,7 +129,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '登录与抓取时会自动切换横屏，保证七天课表列位置稳定；完成后自动恢复竖屏。',
+                  '登录和浏览保持竖屏；点击抓取时会短暂切换横屏，保证七天课表列位置稳定。',
                   style: theme.textTheme.bodySmall,
                 ),
               ),
@@ -145,7 +145,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         ...schoolAdapters.map(
           (adapter) => _SchoolCard(
             adapter: adapter,
-            onTap: () => unawaited(_startLogin(adapter)),
+            onTap: () => _startLogin(adapter),
           ),
         ),
         const SizedBox(height: 20),
@@ -155,7 +155,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             )),
         const SizedBox(height: 8),
         _CustomUrlCard(onSubmit: (url) {
-          unawaited(_startLogin(createGenericAdapter(url)));
+          _startLogin(createGenericAdapter(url));
         }),
         const SizedBox(height: 24),
       ],
@@ -326,24 +326,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
   // ── 逻辑 ──
 
-  Future<void> _startLogin(SchoolAdapter adapter) async {
-    final landscapeReady = await _orientationController.enterCaptureMode();
-    if (!mounted) return;
-    if (!landscapeReady) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法自动切换横屏，请手动将手机旋转为横屏后再抓取')),
-      );
-    } else {
-      // 等待 Android 完成 Activity 尺寸变更，再创建 WebView，避免它保留竖屏视口。
-      final layoutChanged = await _waitForLandscapeLayout();
-      if (!mounted) return;
-      if (!layoutChanged) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('屏幕尚未切换为横屏，请手动旋转手机后再抓取')),
-        );
-      }
-    }
-
+  void _startLogin(SchoolAdapter adapter) {
     final backgroundColor = Theme.of(context).colorScheme.surface;
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -402,6 +385,30 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     setState(() => _extracting = true);
 
     try {
+      // 登录和浏览阶段保持正常竖屏，只在坐标敏感的抓取瞬间临时横屏。
+      final landscapeReady = await _orientationController.enterCaptureMode();
+      if (!mounted) {
+        await _orientationController.leaveCaptureMode();
+        return;
+      }
+      if (!landscapeReady) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法自动切换横屏，请手动将手机旋转为横屏后再抓取')),
+        );
+      } else {
+        // 等待 Android 完成 Activity 与 WebView 尺寸变更，避免读取旧的竖屏坐标。
+        final layoutChanged = await _waitForLandscapeLayout();
+        if (!mounted) {
+          await _orientationController.leaveCaptureMode();
+          return;
+        }
+        if (!layoutChanged) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('屏幕尚未切换为横屏，请手动旋转手机后再抓取')),
+          );
+        }
+      }
+
       // 等待 SPA 动态渲染完成
       await Future.delayed(const Duration(seconds: 2));
 
@@ -421,6 +428,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
           setState(() => _extracting = false);
           if (_navRetry >= 3) {
             _navRetry = 0;
+            await _orientationController.leaveCaptureMode();
+            if (!mounted) return;
             _showNavFailedDialog();
             return;
           }
@@ -480,6 +489,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         ''');
         final debugStr = debugInfo is String ? debugInfo : debugInfo.toString();
         setState(() => _extracting = false);
+        await _orientationController.leaveCaptureMode();
+        if (!mounted) return;
         if (mounted) {
           showDialog(
             context: context,
@@ -530,7 +541,11 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         _extracting = false;
       });
     } catch (e) {
-      setState(() => _extracting = false);
+      if (mounted) {
+        setState(() => _extracting = false);
+      }
+      await _orientationController.leaveCaptureMode();
+      if (!mounted) return;
       // 跳转进行中注入异常（JS 上下文销毁）时静默等待，onPageFinished 会自动重试
       final currentUrl = await _controller?.currentUrl();
       if (currentUrl != null && _adapter!.isSchedulePage(currentUrl)) {
