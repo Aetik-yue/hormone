@@ -10,7 +10,7 @@ Hormone (课表) — a minimal Android college course-schedule app built with Fl
 
 ```bash
 flutter pub get                                              # install deps
-flutter create . --platforms=android                         # regenerate Android platform dir (see below)
+flutter create . --platforms=android --org com.aetikyue         # regenerate Android platform dir (see below)
 dart run build_runner build --delete-conflicting-outputs      # codegen: drift + go_router (after changing tables/routes)
 dart run flutter_launcher_icons                              # regenerate app icons (after changing assets/icon/icon.png)
 dart run flutter_native_splash:create                        # regenerate splash screen

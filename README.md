@@ -107,7 +107,7 @@ cd hormone
 flutter pub get
 
 # 生成 Android 平台目录（android/ 已排除出版本控制）
-flutter create . --platforms=android
+flutter create . --platforms=android --org com.aetikyue
 
 # 运行
 flutter run

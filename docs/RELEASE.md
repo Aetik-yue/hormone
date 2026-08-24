@@ -7,7 +7,7 @@
 首次克隆后生成 Android 原生工程：
 
 ```bash
-flutter create . --platforms=android
+flutter create . --platforms=android --org com.aetikyue
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
 dart run flutter_launcher_icons
@@ -21,7 +21,8 @@ flutter test
 
 ## 2. Application ID
 
-当前应用包名为 `com.hormone.hormone`。如需修改，在生成后的
+当前应用包名为 `com.aetikyue.hormone`（由 `flutter create --org com.aetikyue`
+生成；`pubspec.yaml` 项目名为 `hormone`）。如需修改，在生成后的
 `android/app/build.gradle.kts` 中同步修改：
 
 ```kotlin
@@ -33,7 +34,11 @@ android {
 }
 ```
 
-同时修改 `CourseWidgetProvider.kt` 顶部的 Kotlin 包名和对应目录结构。
+同时修改 `CourseWidgetProvider.kt` 顶部的 Kotlin 包名和对应目录结构，
+以及 `.github/workflows/release.yml` 中 `flutter create` 的 `--org` 参数
+（否则 CI 产物包名仍是 `com.example.hormone`）。
+
+> ⚠️ 包名是应用身份标识，Google Play 上架后不可更改；请提前确认未被占用。
 
 ## 3. 正式签名
 

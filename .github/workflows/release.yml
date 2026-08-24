@@ -29,9 +29,9 @@ jobs:
           cache: true
 
       # This repo is maintained without generated platform directories.
-      # Recreate the Android project in CI.
+      # Recreate the Android project in CI with the app's application id.
       - name: Create platform projects
-        run: flutter create --platforms=android .
+        run: flutter create --platforms=android --org com.aetikyue .
 
       # Apply custom Gradle config (AGP 8.11 compat, NDK, Kotlin 2.2.20)
       - name: Apply custom Gradle config

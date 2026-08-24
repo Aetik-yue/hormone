@@ -11,7 +11,7 @@ Flutter 侧的 `lib/features/widget/` 已经能够把今日课程写入
 在仓库根目录执行：
 
 ```bash
-flutter create . --platforms=android
+flutter create . --platforms=android --org com.aetikyue
 flutter pub get
 ```
 
@@ -19,13 +19,11 @@ flutter pub get
 
 | 模板文件 | 目标位置 |
 |---|---|
-| `native_templates/android/app/src/main/java/com/example/hormone/CourseWidgetProvider.kt` | `android/app/src/main/java/<你的包名>/CourseWidgetProvider.kt` |
+| `native_templates/android/app/src/main/java/com/aetikyue/hormone/CourseWidgetProvider.kt` | `android/app/src/main/java/com/aetikyue/hormone/CourseWidgetProvider.kt` |
 | `native_templates/android/app/src/main/res/xml/course_widget_info.xml` | `android/app/src/main/res/xml/course_widget_info.xml` |
 | `native_templates/android/app/src/main/res/layout/course_widget.xml` | `android/app/src/main/res/layout/course_widget.xml` |
 
-复制 `CourseWidgetProvider.kt` 后，把文件顶部的
-`package com.example.hormone` 改为应用真实包名。真实包名以
-`android/app/build.gradle.kts` 中的 `namespace` 和 `applicationId` 为准。
+模板中的 Kotlin 包名与真实包名 `com.aetikyue.hormone` 一致，复制后无需修改。
 
 ## 3. 注册 Receiver
 
