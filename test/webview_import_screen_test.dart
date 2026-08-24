@@ -40,6 +40,10 @@ void main() {
       find.text('登录和浏览保持竖屏；点击抓取时会短暂切换横屏，保证七天课表列位置稳定。'),
       findsOneWidget,
     );
+    expect(
+      find.text('如果没有你的学校，请在应用商店或 GitHub 给我留言，我会尽快进行适配。'),
+      findsOneWidget,
+    );
     expect(orientationCalls, isEmpty);
     expect(tester.takeException(), isNull);
   });

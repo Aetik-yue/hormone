@@ -340,7 +340,8 @@ class _TroubleshootingCard extends StatelessWidget {
             _TroubleshootingItem(
               icon: Icons.tune_rounded,
               title: '学校不在列表或结果有偏差',
-              description: '尝试自定义 URL；导入前先核对星期、节次和周数，异常课程不要勾选。',
+              description:
+                  '尝试自定义 URL；如果没有你的学校，请在应用商店或 GitHub 给我留言，我会尽快进行适配。导入前请先核对课程信息。',
             ),
           ],
         ),

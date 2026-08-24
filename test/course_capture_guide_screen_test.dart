@@ -45,6 +45,10 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -900));
     await tester.pumpAndSettle();
     expect(find.text('没有抓取到课程？'), findsOneWidget);
+    expect(
+      find.textContaining('如果没有你的学校，请在应用商店或 GitHub 给我留言'),
+      findsOneWidget,
+    );
 
     final startButton = find.byKey(const Key('start-course-capture'));
     await tester.ensureVisible(startButton);

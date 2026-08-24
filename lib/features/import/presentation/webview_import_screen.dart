@@ -157,6 +157,33 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         _CustomUrlCard(onSubmit: (url) {
           _startLogin(createGenericAdapter(url));
         }),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.forum_outlined,
+                size: 20,
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '如果没有你的学校，请在应用商店或 GitHub 给我留言，我会尽快进行适配。',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 24),
       ],
     );
