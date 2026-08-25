@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:hormone/core/models/course.dart';
+import 'package:hormone/core/utils/week_calculator.dart';
+import 'package:hormone/data/providers/database_providers.dart';
+import 'package:hormone/features/schedule/domain/schedule_helpers.dart';
+import 'package:hormone/features/settings/application/section_times_provider.dart';
 import '../application/schedule_providers.dart';
 import '../../semester/application/semester_providers.dart';
-import '../../../core/utils/week_calculator.dart';
-import '../../../data/providers/database_providers.dart';
+import 'course_detail_sheet.dart';
+import 'course_search_delegate.dart';
 import 'week_view.dart';
 
 /// 课程表主页：学期选择 + 周选择器 + 周视图时间轴。
@@ -89,6 +94,16 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
             icon: const Icon(Icons.help_outline_rounded),
             tooltip: '课程抓取说明',
             onPressed: () => context.push('/import/guide'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.today_outlined),
+            tooltip: '今日课程',
+            onPressed: () => _showTodaySheet(context, ref),
+          ),
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: '搜索课程',
+            onPressed: () => _openCourseSearch(context, ref),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
@@ -215,6 +230,140 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       targetPage,
       duration: Duration(milliseconds: 220 + distance * 45),
       curve: Curves.easeOutQuint,
+    );
+  }
+
+  /// 「今日课程」时间线底部弹层。
+  Future<void> _showTodaySheet(BuildContext context, WidgetRef ref) async {
+    final semester = ref.read(activeSemesterProvider).value;
+    final courses =
+        ref.read(scheduleCoursesProvider).value ?? const <Course>[];
+    final sectionTimes = ref.read(sectionTimesProvider);
+    final now = DateTime.now();
+    final currentWeek = semester == null
+        ? 0
+        : semester.currentWeekOverride ??
+            computeCurrentWeek(semester.startDate, now);
+    final slots = todayCourseSlots(
+      courses: courses,
+      currentWeek: currentWeek,
+      now: now,
+      sectionTimes: sectionTimes,
+    );
+
+    final theme = Theme.of(context);
+    final todayLabel = _dayLabels[now.weekday - 1];
+    final dateLabel = '${now.month}月${now.day}日';
+
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                child: Row(
+                  children: [
+                    Text('今日课程', style: theme.textTheme.titleLarge),
+                    const Spacer(),
+                    Text(
+                      currentWeek >= 1 ? '第 $currentWeek 周 · 周$todayLabel $dateLabel' : '尚未开学',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              if (slots.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      currentWeek >= 1 ? '今天没有课程' : '开学后再来看看',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    itemCount: slots.length,
+                    itemBuilder: (context, i) {
+                      final slot = slots[i];
+                      final c = slot.course;
+                      return ListTile(
+                        leading: SizedBox(
+                          width: 64,
+                          child: Text(
+                            _slotClock(c, sectionTimes),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        title: Text(c.name),
+                        subtitle: Text(
+                          [
+                            if (c.location != null && c.location!.isNotEmpty)
+                              c.location!,
+                            if (c.teacher != null && c.teacher!.isNotEmpty)
+                              c.teacher!,
+                          ].join(' · '),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        trailing: _StatusChip(status: slot.status),
+                        onTap: () => showCourseDetailSheet(
+                            context, c, sectionTimes),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _slotClock(Course c, Map<int, SectionTime> sectionTimes) {
+    final start = c.startTime ?? sectionTimes[c.startSection]?.startTime;
+    final end = c.endTime ?? sectionTimes[c.endSection]?.endTime;
+    if (start != null && end != null) return '$start-$end';
+    return '第${c.startSection}-${c.endSection}节';
+  }
+
+  /// 弹出课程搜索，选中后展示详情并支持跳到该周。
+  Future<void> _openCourseSearch(BuildContext context, WidgetRef ref) async {
+    final totalWeeks =
+        ref.read(activeSemesterProvider).valueOrNull?.totalWeeks ?? 18;
+    final course = await showSearch<Course?>(
+      context: context,
+      delegate: CourseSearchDelegate(ref),
+    );
+    if (!mounted || course == null) return;
+    final sectionTimes = ref.read(sectionTimesProvider);
+    showCourseDetailSheet(
+      context,
+      course,
+      sectionTimes,
+      onJumpToWeek: () {
+        if (course.weeks.isNotEmpty) {
+          _animateToWeek(course.weeks.first, totalWeeks);
+        }
+      },
     );
   }
 
@@ -573,6 +722,47 @@ class _WeekSelector extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+const _dayLabels = ['一', '二', '三', '四', '五', '六', '日'];
+
+/// 今日课程时间线的状态标签。
+class _StatusChip extends StatelessWidget {
+  final CourseStatus status;
+  const _StatusChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (label, color, background) = switch (status) {
+      CourseStatus.ongoing => (
+          '进行中',
+          theme.colorScheme.primary,
+          theme.colorScheme.primary.withAlpha((0.14 * 255).round()),
+        ),
+      CourseStatus.upcoming => (
+          '未开始',
+          theme.colorScheme.onSurfaceVariant,
+          theme.colorScheme.surfaceContainerHighest,
+        ),
+      CourseStatus.done => (
+          '已结束',
+          theme.colorScheme.outline,
+          theme.colorScheme.surfaceContainerHighest.withAlpha(120),
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(color: color),
+      ),
     );
   }
 }
