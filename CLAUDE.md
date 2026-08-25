@@ -35,8 +35,12 @@ Feature-first layering under `lib/`:
 
 - `core/` — persistence-free domain: `models/` (`Course`, `Semester`), `constants/`, `theme/`, pure `utils/` (`week_calculator.dart`).
 - `data/` — drift persistence: `tables/` (drift `Table` defs), `repositories/` (domain-typed data access), `mappers.dart`, `providers/`, and `app_database.dart`.
-- `features/` — feature modules, each with `application/` (Riverpod providers) + `presentation/` (screens) + optionally `data/`/`domain/`: `schedule`, `course`, `semester`, `import`, `settings`, `widget`.
+- `features/` — feature modules, each with `application/` (Riverpod providers) + `presentation/` (screens) + optionally `data/`/`domain/`: `schedule`, `course`, `semester`, `import`, `settings`, `notification`, `widget`.
 - `app/router.dart` — go_router route table (7 routes).
+
+### Root effects (`lib/main.dart`)
+
+`_AppEffects` (wrapping the `MaterialApp.router` via `builder`) centralizes side effects triggered by any data/config change: 桌面小组件刷新（防抖）+ 课前提醒重排（防抖）。它监听 `activeSemesterProvider` / `scheduleCoursesProvider` / `sectionTimesProvider` / `reminderSettingsProvider`，并在回到前台与跨过午夜时补跑。页面与导入流程不再自行调用这些服务。
 
 ### Riverpod provider chain
 

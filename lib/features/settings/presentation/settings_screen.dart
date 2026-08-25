@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:hormone/core/constants/app_constants.dart';
 import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/data/repositories/backup_repository.dart';
+import 'package:hormone/features/notification/application/notification_service.dart';
+import 'package:hormone/features/notification/application/reminder_settings_provider.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
 import '../application/theme_mode_provider.dart';
 import '../application/section_times_provider.dart';
@@ -28,6 +30,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(themeModeProvider);
+    final reminder = ref.watch(reminderSettingsProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('设置'),
@@ -66,6 +69,63 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showSectionTimeEditor(context, ref),
           ),
+          const Divider(height: 1),
+
+          // ── 提醒 ──
+          const _SectionHeader('提醒'),
+          SwitchListTile(
+            secondary: const Icon(Icons.notifications_active_outlined),
+            title: const Text('课前提醒'),
+            subtitle: const Text('在每节课开始前几分钟提醒你'),
+            value: reminder.enabled,
+            onChanged: (v) async {
+              if (!v) {
+                await ref
+                    .read(reminderSettingsProvider.notifier)
+                    .setEnabled(false);
+                return;
+              }
+              final granted =
+                  await ref.read(notificationServiceProvider).requestPermission();
+              if (!granted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('需要通知权限才能开启课前提醒，请在系统设置中授权'),
+                  ),
+                );
+                return;
+              }
+              await ref
+                  .read(reminderSettingsProvider.notifier)
+                  .setEnabled(true);
+            },
+          ),
+          if (reminder.enabled)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Row(
+                children: [
+                  Text('提前',
+                      style: Theme.of(context).textTheme.bodyMedium),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SegmentedButton<int>(
+                      segments: reminderLeadOptions
+                          .map((m) => ButtonSegment(
+                                value: m,
+                                label: Text('$m 分钟'),
+                              ))
+                          .toList(),
+                      selected: {reminder.leadMinutes},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) => ref
+                          .read(reminderSettingsProvider.notifier)
+                          .setLeadMinutes(s.first),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const Divider(height: 1),
 
           // ── 数据 ──

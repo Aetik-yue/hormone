@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hormone/app/router.dart';
 import 'package:hormone/core/theme/app_theme.dart';
+import 'package:hormone/features/notification/application/notification_service.dart';
+import 'package:hormone/features/notification/application/reminder_settings_provider.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/settings/application/section_times_provider.dart';
 import 'package:hormone/features/settings/application/theme_mode_provider.dart';
@@ -48,7 +50,11 @@ class _AppEffects extends ConsumerStatefulWidget {
 class _AppEffectsState extends ConsumerState<_AppEffects>
     with WidgetsBindingObserver {
   Timer? _midnightTimer;
+
+  /// 通知重排的防抖定时器：课表/设置变化会连发多次事件，合并为一次。
+  Timer? _reminderDebounce;
   WidgetService? _service;
+  NotificationService? _notificationService;
 
   @override
   void initState() {
@@ -61,6 +67,7 @@ class _AppEffectsState extends ConsumerState<_AppEffects>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _midnightTimer?.cancel();
+    _reminderDebounce?.cancel();
     super.dispose();
   }
 
@@ -69,23 +76,40 @@ class _AppEffectsState extends ConsumerState<_AppEffects>
     // 回到前台：可能跨越了午夜，立即补刷一次今日课程。
     if (state == AppLifecycleState.resumed) {
       _service?.updateTodayWidget();
+      _scheduleReminderRefresh();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 首次访问时取出小组件服务（懒加载，失败静默）。
+    // 首次访问时取出小组件与通知服务（懒加载，失败静默）。
     _service ??= ref.read(widgetServiceProvider);
+    _notificationService ??= ref.read(notificationServiceProvider);
 
-    // 任一与「今日课程」相关的数据变化，都触发一次防抖刷新。
-    ref.listen(activeSemesterProvider, (_, __) => _service!.scheduleUpdate());
-    ref.listen(scheduleCoursesProvider, (_, __) => _service!.scheduleUpdate());
-    ref.listen(sectionTimesProvider, (_, __) => _service!.scheduleUpdate());
+    // 任一与「今日课程 / 提醒」相关的数据变化，都触发一次防抖同步。
+    ref.listen(activeSemesterProvider, (_, __) => _onDataChanged());
+    ref.listen(scheduleCoursesProvider, (_, __) => _onDataChanged());
+    ref.listen(sectionTimesProvider, (_, __) => _onDataChanged());
+    ref.listen(reminderSettingsProvider, (_, __) => _onDataChanged());
 
     return widget.child;
   }
 
-  /// 在下一个午夜安排一次刷新。跨过午夜后今日课程与当前周都会变化。
+  /// 数据变化后的统一入口：刷新小组件 + 重排课前提醒（各自防抖）。
+  void _onDataChanged() {
+    _service?.scheduleUpdate();
+    _scheduleReminderRefresh();
+  }
+
+  void _scheduleReminderRefresh() {
+    _reminderDebounce?.cancel();
+    _reminderDebounce =
+        Timer(const Duration(milliseconds: 800), () {
+      _notificationService?.reschedule();
+    });
+  }
+
+  /// 在下一个午夜安排一次刷新。跨过午夜后今日课程、当前周与提醒都会变化。
   void _scheduleMidnightRefresh() {
     _midnightTimer?.cancel();
     final now = DateTime.now();
@@ -94,6 +118,7 @@ class _AppEffectsState extends ConsumerState<_AppEffects>
       nextMidnight.difference(now) + const Duration(seconds: 1),
       () {
         _service?.updateTodayWidget();
+        _scheduleReminderRefresh();
         _scheduleMidnightRefresh();
       },
     );
