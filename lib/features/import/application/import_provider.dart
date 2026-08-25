@@ -10,7 +10,6 @@ import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/features/import/domain/import_course.dart';
 import 'package:hormone/features/import/data/ics_parser.dart';
 import 'package:hormone/features/import/data/json_importer.dart';
-import 'package:hormone/features/widget/application/widget_service.dart';
 
 /// 导入流程状态机。
 enum ImportStatus {
@@ -158,14 +157,8 @@ class ImportNotifier extends StateNotifier<ImportState> {
     await repo.replaceForSemester(semester.id, replacements);
     final count = replacements.length;
 
-    // 课程流由 drift watch 自动发射新数据，无需手动 invalidate。
-
-    // 导入后同步桌面小组件（今日课程可能变化）。
-    try {
-      _ref.read(widgetServiceProvider).updateTodayWidget();
-    } catch (_) {
-      // 小组件刷新失败不应影响导入结果。
-    }
+    // 课程流由 drift watch 自动发射新数据，无需手动 invalidate；
+    // 桌面小组件刷新由根部的 _AppEffects 集中监听，这里不再单独触发。
 
     state = state.copyWith(
       status: ImportStatus.done,

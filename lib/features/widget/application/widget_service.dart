@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +24,9 @@ class WidgetService {
   final Ref _ref;
   bool _initialized = false;
 
+  /// 防抖定时器：课表数据变更时会连发多次流事件，合并为一次刷新。
+  Timer? _debounce;
+
   WidgetService(this._ref);
 
   /// 幂等初始化并注册小组件点击回调。
@@ -34,6 +38,17 @@ class WidgetService {
         .then(_onWidgetClicked)
         .catchError((_) {});
     HomeWidget.widgetClicked.listen(_onWidgetClicked);
+  }
+
+  /// 课表/节次/当前周变化后集中触发的刷新入口。
+  ///
+  /// 用短防抖合并一条打印链路上连续发射的多次流事件（切换学期、批量导入、
+  /// 恢复备份都会同时波及多个 provider），避免对原生小组件反复写数据。
+  void scheduleUpdate() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      updateTodayWidget();
+    });
   }
 
   /// 计算并写入「今日课程」到原生小组件，然后刷新 UI。

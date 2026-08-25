@@ -48,7 +48,10 @@ flutter run
 
 ## 5. 已知限制
 
-- 小组件主要在 App 启动、课程导入或编辑后刷新，尚未接入后台定时任务。
+- 小组件刷新集中由应用根部的 `_AppEffects` 驱动：监听学期/课程/节次变化（防抖）
+  与回到前台、跨过午夜时补刷；App 未在后台运行时不刷新。
+- 尚未接入 Android 后台定时任务（如需整点自定义，可加 `WorkManager` 或
+  `home_widget` 的 background callback）。
 - 小组件最多展示原生模板允许的前若干门课程；如需滚动列表，可改为
   `RemoteViewsService`。
 - ICS 时间按学校本地时间处理，忽略 `TZID`/UTC 偏移。

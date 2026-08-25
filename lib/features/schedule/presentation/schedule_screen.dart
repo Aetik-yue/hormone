@@ -6,11 +6,7 @@ import '../application/schedule_providers.dart';
 import '../../semester/application/semester_providers.dart';
 import '../../../core/utils/week_calculator.dart';
 import '../../../data/providers/database_providers.dart';
-import '../../widget/application/widget_service.dart';
 import 'week_view.dart';
-
-/// 仅同步一次：进入课程表主页即刷新桌面小组件（今日课程）。
-bool _widgetSynced = false;
 
 /// 课程表主页：学期选择 + 周选择器 + 周视图时间轴。
 class ScheduleScreen extends ConsumerStatefulWidget {
@@ -52,13 +48,6 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           s == null ? null : computeCurrentWeek(s.startDate, DateTime.now()),
     );
     final isCurrentWeek = computedWeek != null && computedWeek == selectedWeek;
-
-    if (!_widgetSynced) {
-      _widgetSynced = true;
-      Future.microtask(
-        () => ref.read(widgetServiceProvider).updateTodayWidget(),
-      );
-    }
 
     // 外部周次变化（异步首屏定位、切学期、深链跳转等）时对齐分页位置。
     // 每次 build 后也兜底同步，覆盖 Provider 在 PageView 挂载前完成初始化的竞态。
@@ -310,9 +299,6 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                                       computeCurrentWeek(
                                           s.startDate, DateTime.now()),
                                       totalWeeks: s.totalWeeks);
-                                  ref
-                                      .read(widgetServiceProvider)
-                                      .updateTodayWidget();
                                   if (ctx.mounted) Navigator.of(ctx).pop();
                                 },
                         );

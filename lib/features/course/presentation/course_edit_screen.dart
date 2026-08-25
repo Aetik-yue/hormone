@@ -8,7 +8,6 @@ import 'package:hormone/features/course/application/course_form_provider.dart';
 import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/settings/application/section_times_provider.dart';
-import 'package:hormone/features/widget/application/widget_service.dart';
 
 const List<String> _weekdayLabels = [
   '周一',
@@ -134,7 +133,6 @@ class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
       );
       return;
     }
-    ref.read(widgetServiceProvider).updateTodayWidget();
     if (context.mounted) context.pop();
   }
 }
@@ -417,7 +415,6 @@ class _CourseFormBodyState extends ConsumerState<CourseFormBody> {
         }
         return;
       }
-      ref.read(widgetServiceProvider).updateTodayWidget();
       if (context.mounted) context.pop();
     }
   }

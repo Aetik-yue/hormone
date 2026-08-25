@@ -9,7 +9,6 @@ import 'package:hormone/core/constants/app_constants.dart';
 import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/data/repositories/backup_repository.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
-import 'package:hormone/features/widget/application/widget_service.dart';
 import '../application/theme_mode_provider.dart';
 import '../application/section_times_provider.dart';
 import '../application/export_service.dart';
@@ -226,11 +225,11 @@ class SettingsScreen extends ConsumerWidget {
     try {
       final result2 =
           await ref.read(backupRepositoryProvider).restore(jsonText);
-      // 刷新依赖学期/课程数据的全部 Provider。
+      // 刷新依赖学期/课程数据的全部 Provider（桌面小组件由 _AppEffects
+      // 监听这些 provider 集中触发刷新）。
       ref.invalidate(activeSemesterProvider);
       ref.invalidate(scheduleCoursesProvider);
       ref.invalidate(semestersProvider);
-      ref.read(widgetServiceProvider).updateTodayWidget();
       messenger.showSnackBar(
         SnackBar(
           content: Text(
