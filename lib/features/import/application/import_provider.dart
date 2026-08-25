@@ -10,7 +10,6 @@ import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/features/import/domain/import_course.dart';
 import 'package:hormone/features/import/data/ics_parser.dart';
 import 'package:hormone/features/import/data/json_importer.dart';
-import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/widget/application/widget_service.dart';
 
 /// 导入流程状态机。
@@ -159,9 +158,7 @@ class ImportNotifier extends StateNotifier<ImportState> {
     await repo.replaceForSemester(semester.id, replacements);
     final count = replacements.length;
 
-    // 刷新依赖课程数据的上游 Provider。
-    _ref.invalidate(scheduleCoursesProvider);
-    _ref.invalidate(activeSemesterProvider);
+    // 课程流由 drift watch 自动发射新数据，无需手动 invalidate。
 
     // 导入后同步桌面小组件（今日课程可能变化）。
     try {

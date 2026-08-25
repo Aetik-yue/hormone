@@ -2,26 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:hormone/core/constants/app_constants.dart';
 import 'package:hormone/core/models/course.dart';
 import 'package:hormone/features/course/application/course_form_provider.dart';
 import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/settings/application/section_times_provider.dart';
 import 'package:hormone/features/widget/application/widget_service.dart';
-
-/// 卡片可选配色（柔和马卡龙色系，彼此可区分且深浅主题协调）。
-const List<int> _palette = [
-  0xFF5B8DEF,
-  0xFF3FBFA8,
-  0xFFF2A25C,
-  0xFF9B8AFB,
-  0xFFEF6E8D,
-  0xFF4FA3E3,
-  0xFFE8BE50,
-  0xFF63C98D,
-  0xFFC08CE8,
-  0xFFF08C7C,
-];
 
 const List<String> _weekdayLabels = [
   '周一',
@@ -349,7 +336,7 @@ class _CourseFormBodyState extends ConsumerState<CourseFormBody> {
         const _FieldLabel('卡片颜色'),
         Wrap(
           spacing: 10,
-          children: _palette.map((c) {
+          children: AppConstants.coursePalette.map((c) {
             final selected = course.colorValue == c;
             return InkWell(
               onTap: () =>

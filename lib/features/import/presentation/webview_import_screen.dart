@@ -8,11 +8,11 @@ import 'package:uuid/uuid.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
+import 'package:hormone/core/constants/app_constants.dart';
 import 'package:hormone/core/models/course.dart';
 import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/features/import/application/course_capture_orientation.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
-import 'package:hormone/features/widget/application/widget_service.dart';
 import '../data/school_adapter.dart';
 
 /// WebView 教务系统导入页：选学校 -> 登录 -> 自动抓取 -> 预览 -> 导入。
@@ -652,7 +652,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         startSection: ec.startSection,
         endSection: ec.endSection,
         weeks: ec.weeks,
-        colorValue: _autoColor(replacements.length),
+        colorValue: AppConstants.courseAutoColor(replacements.length),
       ));
     }
 
@@ -660,31 +660,12 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     await repo.replaceForSemester(semester.id, replacements);
     final count = replacements.length;
 
-    ref.read(widgetServiceProvider).updateTodayWidget();
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('已用 $count 门课程替换当前课表')),
       );
       context.pop();
     }
-  }
-
-  int _autoColor(int index) {
-    // 与课程编辑页一致的柔和马卡龙色板。
-    const palette = [
-      0xFF5B8DEF,
-      0xFF3FBFA8,
-      0xFFF2A25C,
-      0xFF9B8AFB,
-      0xFFEF6E8D,
-      0xFF4FA3E3,
-      0xFFE8BE50,
-      0xFF63C98D,
-      0xFFC08CE8,
-      0xFFF08C7C,
-    ];
-    return palette[index % palette.length];
   }
 }
 

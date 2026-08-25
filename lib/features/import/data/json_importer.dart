@@ -139,10 +139,12 @@ class JsonCourseImporter {
 
   /// 解析颜色：支持 "#RRGGBB" / "0xFFRRGGBB" / 纯 "RRGGBB"。失败回退默认蓝。
   static int _parseColor(String? s) {
-    if (s == null) return 0xFF5B8DEF;
+    if (s == null) return AppConstants.defaultCourseColor;
     var hex = s.replaceAll('#', '').replaceAll('0x', '').replaceAll('0X', '');
     if (hex.length == 6) hex = 'FF$hex';
-    if (hex.length == 8) return int.tryParse(hex, radix: 16) ?? 0xFF5B8DEF;
-    return 0xFF5B8DEF;
+    if (hex.length == 8) {
+      return int.tryParse(hex, radix: 16) ?? AppConstants.defaultCourseColor;
+    }
+    return AppConstants.defaultCourseColor;
   }
 }

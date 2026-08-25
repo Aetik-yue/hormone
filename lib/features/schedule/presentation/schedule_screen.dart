@@ -302,8 +302,9 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                                   final repo =
                                       ref.read(semesterRepositoryProvider);
                                   await repo.setActive(s.id);
+                                  // scheduleCoursesProvider 内部 watch 了
+                                  // activeSemesterProvider，失效会自动传播。
                                   ref.invalidate(activeSemesterProvider);
-                                  ref.invalidate(scheduleCoursesProvider);
                                   // 切换学期后重置到当前周
                                   ref.read(selectedWeekProvider.notifier).goTo(
                                       computeCurrentWeek(

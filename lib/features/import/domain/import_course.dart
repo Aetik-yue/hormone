@@ -1,3 +1,4 @@
+import 'package:hormone/core/constants/app_constants.dart';
 import 'package:hormone/core/models/course.dart';
 
 /// 导入过程中的单门课程中间表示。
@@ -29,7 +30,7 @@ class ImportCourse {
     this.startTime,
     this.endTime,
     this.weeks = const [],
-    this.colorValue = 0xFF5B8DEF,
+    this.colorValue = AppConstants.defaultCourseColor,
     this.notes,
     required this.source,
     this.selected = true,

@@ -271,19 +271,6 @@ class IcsCourseParser {
         .trim();
   }
 
-  static int _pickColor(int index) {
-    const palette = [
-      0xFF5B8DEF,
-      0xFFE57373,
-      0xFF81C784,
-      0xFFFFB74D,
-      0xFFBA68C8,
-      0xFF4DB6AC,
-      0xFFA1887F,
-      0xFF9575CD,
-      0xFF7986CB,
-      0xFF4FC3F7,
-    ];
-    return palette[index % palette.length];
-  }
+  static int _pickColor(int index) =>
+      AppConstants.courseAutoColor(index);
 }

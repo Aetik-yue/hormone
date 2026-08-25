@@ -1,3 +1,5 @@
+import 'package:hormone/core/constants/app_constants.dart';
+
 /// 单门课程。周次以 [weeks] 列表表示（如 [1,2,3,5,6,..18]）。
 class Course {
   final String id;
@@ -26,7 +28,7 @@ class Course {
     this.startTime,
     this.endTime,
     this.weeks = const [],
-    this.colorValue = 0xFF5B8DEF,
+    this.colorValue = AppConstants.defaultCourseColor,
     this.notes,
   })  : assert(dayOfWeek >= 1 && dayOfWeek <= 7, 'dayOfWeek must be 1-7'),
         assert(startSection >= 1, 'startSection must be >= 1'),

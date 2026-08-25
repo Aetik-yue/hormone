@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:hormone/core/constants/app_constants.dart';
 import 'package:hormone/core/models/course.dart';
 import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/data/repositories/course_repository.dart';
@@ -41,7 +42,7 @@ final courseInitialProvider =
     startSection: 1,
     endSection: 2,
     weeks: List.generate(totalWeeks, (i) => i + 1),
-    colorValue: 0xFF5B8DEF,
+    colorValue: AppConstants.defaultCourseColor,
   );
 });
 
@@ -62,7 +63,7 @@ class CourseFormNotifier extends StateNotifier<Course> {
           startSection: 1,
           endSection: 2,
           weeks: [],
-          colorValue: 0xFF5B8DEF,
+          colorValue: AppConstants.defaultCourseColor,
         ));
 
   bool _initialized = false;
