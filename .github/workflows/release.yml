@@ -33,13 +33,15 @@ jobs:
       - name: Create platform projects
         run: flutter create --platforms=android --org com.aetikyue .
 
-      # Apply custom Gradle config (AGP 8.11 compat, NDK, Kotlin 2.2.20)
+      # Apply custom Gradle config (AGP 8.11 compat, NDK, Kotlin 2.2.20, desugaring)
       - name: Apply custom Gradle config
         run: |
           NDK_VERSION=$(ls $ANDROID_HOME/ndk/ | sort -V | tail -1)
           sed "s/__NDK_VERSION__/$NDK_VERSION/g" native_templates/android/build.gradle > android/build.gradle
           cp native_templates/android/settings.gradle android/settings.gradle
           cp native_templates/android/gradle/wrapper/gradle-wrapper.properties android/gradle/wrapper/gradle-wrapper.properties
+          # app 模块启用 core library desugaring（flutter_local_notifications 依赖）并保持小组件原生配置。
+          cp native_templates/android/app/build.gradle.kts android/app/build.gradle.kts
 
       - name: Get dependencies
         run: flutter pub get
