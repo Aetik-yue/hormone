@@ -15,6 +15,7 @@ class WebviewImportState {
   final bool extracting;
   final List<ImportCourse> courses;
   final int skippedCount;
+  final ImportMode mode;
 
   const WebviewImportState({
     this.phase = WebviewPhase.select,
@@ -22,6 +23,7 @@ class WebviewImportState {
     this.extracting = false,
     this.courses = const [],
     this.skippedCount = 0,
+    this.mode = ImportMode.replace,
   });
 
   WebviewImportState copyWith({
@@ -30,6 +32,7 @@ class WebviewImportState {
     bool? extracting,
     List<ImportCourse>? courses,
     int? skippedCount,
+    ImportMode? mode,
   }) =>
       WebviewImportState(
         phase: phase ?? this.phase,
@@ -37,6 +40,7 @@ class WebviewImportState {
         extracting: extracting ?? this.extracting,
         courses: courses ?? this.courses,
         skippedCount: skippedCount ?? this.skippedCount,
+        mode: mode ?? this.mode,
       );
 
   int get selectedCount =>
@@ -58,6 +62,8 @@ class WebviewImportNotifier extends StateNotifier<WebviewImportState> {
   void setLoading(bool v) => state = state.copyWith(loading: v);
 
   void setExtracting(bool v) => state = state.copyWith(extracting: v);
+
+  void setMode(ImportMode mode) => state = state.copyWith(mode: mode);
 
   /// 解析结果进入预览：把 [courses] 全部设为勾选态。
   void showPreview(List<ImportCourse> courses, int skippedCount) {

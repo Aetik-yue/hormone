@@ -131,6 +131,12 @@ void main() {
       notifier.backToLogin();
       expect(notifier.state.phase, WebviewPhase.login);
     });
+
+    test('默认替换模式，可切换为合并', () {
+      expect(notifier.state.mode, ImportMode.replace);
+      notifier.setMode(ImportMode.merge);
+      expect(notifier.state.mode, ImportMode.merge);
+    });
   });
 }
 

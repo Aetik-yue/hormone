@@ -62,6 +62,41 @@ void main() {
     expect(current, hasLength(1));
     expect(current.single.id, 'old-a');
   });
+
+  test('addCourses 追加课程且不影响现有课程', () async {
+    await repository.upsert(_course('a', 'semester-a', '课程 A'));
+
+    await repository.addCourses('semester-a', [
+      _course('b', 'semester-a', '课程 B'),
+      _course('c', 'semester-a', '课程 C'),
+    ]);
+
+    final current = await repository.getCourses('semester-a');
+    expect(current, hasLength(3));
+    expect(current.map((c) => c.id), unorderedEquals(['a', 'b', 'c']));
+  });
+
+  test('addCourses 拒绝空 id / 越界学期 / 重复 id', () async {
+    await expectLater(
+      repository.addCourses('semester-a', [
+        _course('', 'semester-a', '空 id'),
+      ]),
+      throwsArgumentError,
+    );
+    await expectLater(
+      repository.addCourses('semester-a', [
+        _course('x', 'semester-b', '错误学期'),
+      ]),
+      throwsArgumentError,
+    );
+    await expectLater(
+      repository.addCourses('semester-a', [
+        _course('dup', 'semester-a', 'A'),
+        _course('dup', 'semester-a', 'B'),
+      ]),
+      throwsArgumentError,
+    );
+  });
 }
 
 Course _course(String id, String semesterId, String name) => Course(

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hormone/core/models/course.dart';
 import 'package:hormone/features/import/domain/import_course.dart';
 
 ImportCourse _c({
@@ -86,6 +87,43 @@ void main() {
       expect(course.id, isEmpty);
       expect(course.name, '物理');
       expect(course.location, '教二');
+    });
+  });
+
+  group('conflictsWithCourse', () {
+    test('合并模式下与现有课程同时段重叠 => 冲突', () {
+      final imp = _c(name: '新课', day: 1, start: 1, end: 2, weeks: const [1]);
+      final existing = const Course(
+        id: 'e1',
+        semesterId: 's',
+        name: '旧课',
+        dayOfWeek: 1,
+        startSection: 2,
+        endSection: 3,
+        weeks: [1],
+      );
+      expect(conflictsWithCourse(imp, existing), isTrue);
+    });
+
+    test('节次不重叠 => 不冲突', () {
+      final imp = _c(name: '新课', day: 1, start: 1, end: 2, weeks: const [1]);
+      final existing = const Course(
+        id: 'e1',
+        semesterId: 's',
+        name: '旧课',
+        dayOfWeek: 1,
+        startSection: 3,
+        endSection: 4,
+        weeks: [1],
+      );
+      expect(conflictsWithCourse(imp, existing), isFalse);
+    });
+  });
+
+  group('ImportMode', () {
+    test('默认为替换模式', () {
+      expect(ImportMode.replace, isA<ImportMode>());
+      expect(ImportMode.values, containsAll([ImportMode.replace, ImportMode.merge]));
     });
   });
 }

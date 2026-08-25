@@ -89,6 +89,40 @@ class CourseRepository {
     });
   }
 
+  /// 向指定学期批量追加课程（合并导入使用）。
+  ///
+  /// 与 [replaceForSemester] 不同：不删除现有课程，仅追加。id 必填且唯一，
+  /// 校验失败抛 [ArgumentError] 且不写入任何数据。
+  Future<void> addCourses(String semesterId, Iterable<Course> courses) async {
+    if (semesterId.isEmpty) {
+      throw ArgumentError.value(semesterId, 'semesterId', 'must not be empty');
+    }
+
+    final additions = courses.toList(growable: false);
+    final ids = <String>{};
+    for (final course in additions) {
+      if (course.id.isEmpty) {
+        throw ArgumentError('Course.id must not be empty');
+      }
+      if (course.semesterId != semesterId) {
+        throw ArgumentError(
+          'Course ${course.id} belongs to semester ${course.semesterId}, '
+          'not $semesterId',
+        );
+      }
+      if (!ids.add(course.id)) {
+        throw ArgumentError('Duplicate course id: ${course.id}');
+      }
+    }
+    if (additions.isEmpty) return;
+    await _db.batch((batch) {
+      batch.insertAll(
+        _db.courses,
+        additions.map((course) => course.toCompanion()).toList(),
+      );
+    });
+  }
+
   Future<void> delete(String id) async {
     await (_db.delete(_db.courses)..where((c) => c.id.equals(id))).go();
   }

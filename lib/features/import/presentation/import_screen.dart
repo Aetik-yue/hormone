@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hormone/core/models/course.dart';
+import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/features/import/application/import_provider.dart';
 import 'package:hormone/features/import/domain/import_course.dart';
+import 'package:hormone/features/semester/application/semester_providers.dart';
+import 'import_confirm_dialog.dart';
 import 'import_preview_list.dart';
 
 /// 课程导入页（Phase 5）。
@@ -66,12 +70,39 @@ class ImportScreen extends ConsumerWidget {
     if (state.status != ImportStatus.preview) return null;
     final notifier = ref.read(importProvider.notifier);
     return FloatingActionButton.extended(
-      onPressed:
-          state.selectedCount > 0 ? () => notifier.confirmImport() : null,
+      onPressed: state.selectedCount > 0
+          ? () => _confirmAndImport(context, ref, state, notifier)
+          : null,
       icon: const Icon(Icons.download_done),
       label: Text('导入 ${state.selectedCount} 门'),
     );
   }
+
+  /// 二次确认后再执行导入（替换/合并均需确认）。
+  Future<void> _confirmAndImport(
+    BuildContext context,
+    WidgetRef ref,
+    ImportState state,
+    ImportNotifier notifier,
+  ) async {
+    final existing = await _existingCourseCount(ref);
+    if (!context.mounted) return;
+    final ok = await showImportConfirmDialog(
+      context,
+      mode: state.mode,
+      importCount: state.selectedCount,
+      existingCount: existing,
+    );
+    if (ok) await notifier.confirmImport();
+  }
+}
+
+/// 当前激活学期已有的课程数（用于确认弹窗展示）。
+Future<int> _existingCourseCount(WidgetRef ref) async {
+  final repo = ref.read(courseRepositoryProvider);
+  final semester = await ref.read(semesterRepositoryProvider).getActiveSemester();
+  if (semester == null) return 0;
+  return (await repo.getCourses(semester.id)).length;
 }
 
 /// 空闲/选择文件视图。
@@ -130,9 +161,14 @@ class _PreviewList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final notifier = ref.read(importProvider.notifier);
+    // 合并模式需要与现有课表比对冲突；替换模式会清空现有课表，无意义。
+    final existingCourses =
+        state.mode == ImportMode.merge
+            ? ref.watch(scheduleCoursesProvider).valueOrNull ?? const <Course>[]
+            : const <Course>[];
 
-    // 已选课程中 pairwise 冲突检测，给出顶部提示。
-    final conflicts = _conflictNames(state);
+    // 内部 pairwise 冲突 +（合并模式下）与现有课表的冲突。
+    final conflicts = _conflictNames(state, existingCourses);
 
     return Column(
       children: [
@@ -154,22 +190,51 @@ class _PreviewList extends ConsumerWidget {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SegmentedButton<ImportMode>(
+            segments: const [
+              ButtonSegment(
+                value: ImportMode.replace,
+                icon: Icon(Icons.restart_alt, size: 18),
+                label: Text('替换'),
+              ),
+              ButtonSegment(
+                value: ImportMode.merge,
+                icon: Icon(Icons.library_add_outlined, size: 18),
+                label: Text('合并'),
+              ),
+            ],
+            selected: {state.mode},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => notifier.setMode(s.first),
+          ),
+        ),
+        const SizedBox(height: 8),
         Container(
           width: double.infinity,
-          margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          margin: const EdgeInsets.symmetric(horizontal: 12),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: theme.colorScheme.secondaryContainer,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
-            '确认后，所选课程将替换当前学期的原有课表。',
+            state.mode == ImportMode.merge
+                ? '合并模式：保留现有课表，追加所选课程。'
+                : '替换模式：所选课程将替换当前学期的原有课表。',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSecondaryContainer,
             ),
           ),
         ),
-        if (conflicts.isNotEmpty) ImportConflictBanner(names: conflicts),
+        if (conflicts.isNotEmpty)
+          ImportConflictBanner(
+            names: conflicts,
+            reason: state.mode == ImportMode.merge
+                ? '与现有课程或彼此同时段重叠'
+                : '所选课程彼此同时段重叠',
+          ),
         const Divider(height: 1),
         Expanded(
           child: ImportPreviewList(
@@ -182,15 +247,24 @@ class _PreviewList extends ConsumerWidget {
     );
   }
 
-  /// 返回存在时间冲突的已选课程名称集合（用于高亮与提示）。
-  Set<String> _conflictNames(ImportState state) {
+  /// 返回存在时间冲突的已选课程名称集合（内部冲突 + 与现有课表冲突）。
+  Set<String> _conflictNames(
+    ImportState state,
+    List<Course> existingCourses,
+  ) {
     final selected = state.courses.where((c) => c.selected).toList();
     final names = <String>{};
     for (var i = 0; i < selected.length; i++) {
       for (var j = i + 1; j < selected.length; j++) {
         if (coursesConflict(selected[i], selected[j])) {
+          names
+            ..add(selected[i].name)
+            ..add(selected[j].name);
+        }
+      }
+      for (final e in existingCourses) {
+        if (conflictsWithCourse(selected[i], e)) {
           names.add(selected[i].name);
-          names.add(selected[j].name);
         }
       }
     }

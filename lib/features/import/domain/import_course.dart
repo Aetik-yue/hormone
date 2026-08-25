@@ -84,3 +84,21 @@ bool coursesConflict(ImportCourse a, ImportCourse b) {
   final weekOverlap = a.weeks.any((w) => b.weeks.contains(w));
   return weekOverlap;
 }
+
+/// 判断导入课程与已落库课程是否时间冲突（合并导入时提示用户）。
+bool conflictsWithCourse(ImportCourse a, Course b) {
+  if (a.dayOfWeek != b.dayOfWeek) return false;
+  final sectionsOverlap =
+      a.startSection <= b.endSection && b.startSection <= a.endSection;
+  if (!sectionsOverlap) return false;
+  return a.weeks.any((w) => b.weeks.contains(w));
+}
+
+/// 导入模式：替换当前学期课表，或在现有课表上合并追加。
+enum ImportMode {
+  /// 整体替换：先清空当前学期课程，再写入所选课程。
+  replace,
+
+  /// 合并追加：保留现有课程，把所选课程以新 id 追加进去。
+  merge,
+}

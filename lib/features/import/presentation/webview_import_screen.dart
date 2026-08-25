@@ -12,9 +12,11 @@ import 'package:hormone/core/models/course.dart';
 import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/features/import/application/course_capture_orientation.dart';
 import 'package:hormone/features/import/application/webview_import_provider.dart';
+import 'package:hormone/features/import/domain/import_course.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/settings/application/section_times_provider.dart';
 import '../data/school_adapter.dart';
+import 'import_confirm_dialog.dart';
 import 'import_preview_list.dart';
 
 /// WebView 教务系统导入页：选学校 -> 登录 -> 自动抓取 -> 预览 -> 导入。
@@ -85,8 +87,9 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             ),
           if (state.phase == WebviewPhase.preview)
             TextButton(
-              onPressed:
-                  state.selectedCount == 0 ? null : _importSelected,
+              onPressed: state.selectedCount == 0
+                  ? null
+                  : () => _confirmAndImport(state),
               child: Text('导入 (${state.selectedCount})'),
             ),
         ],
@@ -322,6 +325,12 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
     final theme = Theme.of(context);
     final notifier = ref.read(webviewImportProvider.notifier);
+    // 合并模式需要与现有课表比对冲突；替换模式会清空现有课表，无意义。
+    final existingCourses = state.mode == ImportMode.merge
+        ? ref.watch(scheduleCoursesProvider).valueOrNull ??
+            const <Course>[]
+        : const <Course>[];
+    final conflictedNames = _conflictNames(state, existingCourses);
     return Column(
       children: [
         Container(
@@ -351,12 +360,35 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: SegmentedButton<ImportMode>(
+            segments: const [
+              ButtonSegment(
+                value: ImportMode.replace,
+                icon: Icon(Icons.restart_alt, size: 18),
+                label: Text('替换'),
+              ),
+              ButtonSegment(
+                value: ImportMode.merge,
+                icon: Icon(Icons.library_add_outlined, size: 18),
+                label: Text('合并'),
+              ),
+            ],
+            selected: {state.mode},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) =>
+                ref.read(webviewImportProvider.notifier).setMode(s.first),
+          ),
+        ),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           color: theme.colorScheme.secondaryContainer,
           child: Text(
-            '确认导入后，所选课程将替换当前学期的原有课表。',
+            state.mode == ImportMode.merge
+                ? '合并模式：保留现有课表，追加所选课程。'
+                : '替换模式：所选课程将替换当前学期的原有课表。',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSecondaryContainer,
             ),
@@ -384,14 +416,46 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
               ],
             ),
           ),
+        if (conflictedNames.isNotEmpty)
+          ImportConflictBanner(
+            names: conflictedNames,
+            reason: state.mode == ImportMode.merge
+                ? '与现有课程或彼此同时段重叠'
+                : '所选课程彼此同时段重叠',
+          ),
         Expanded(
           child: ImportPreviewList(
             courses: state.courses,
+            conflictedNames: conflictedNames,
             onToggle: notifier.toggle,
           ),
         ),
       ],
     );
+  }
+
+  /// 返回存在时间冲突的已选课程名称集合（内部冲突 + 与现有课表冲突）。
+  Set<String> _conflictNames(
+    WebviewImportState state,
+    List<Course> existingCourses,
+  ) {
+    final selected = state.courses.where((c) => c.selected).toList();
+    final names = <String>{};
+    for (var i = 0; i < selected.length; i++) {
+      for (var j = i + 1; j < selected.length; j++) {
+        if (coursesConflict(selected[i], selected[j])) {
+          names
+            ..add(selected[i].name)
+            ..add(selected[j].name);
+        }
+      }
+      for (final e in existingCourses) {
+        if (conflictsWithCourse(selected[i], e)) {
+          names.add(selected[i].name);
+        }
+      }
+    }
+    return names;
   }
 
   // ── 逻辑 ──
@@ -651,6 +715,27 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     );
   }
 
+  Future<void> _confirmAndImport(WebviewImportState state) async {
+    // 二次确认：替换/合并都先向用户说明影响面。
+    final existing = await _existingCourseCount();
+    if (!mounted) return;
+    final ok = await showImportConfirmDialog(
+      context,
+      mode: state.mode,
+      importCount: state.selectedCount,
+      existingCount: existing,
+    );
+    if (ok && mounted) await _importSelected();
+  }
+
+  Future<int> _existingCourseCount() async {
+    final repo = ref.read(courseRepositoryProvider);
+    final semester =
+        await ref.read(semesterRepositoryProvider).getActiveSemester();
+    if (semester == null) return 0;
+    return (await repo.getCourses(semester.id)).length;
+  }
+
   Future<void> _importSelected() async {
     final semester = ref.read(activeSemesterProvider).value;
     if (semester == null) {
@@ -688,12 +773,20 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     }
 
     if (replacements.isEmpty) return;
-    await repo.replaceForSemester(semester.id, replacements);
+    if (state.mode == ImportMode.merge) {
+      await repo.addCourses(semester.id, replacements);
+    } else {
+      await repo.replaceForSemester(semester.id, replacements);
+    }
     final count = replacements.length;
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已用 $count 门课程替换当前课表')),
+        SnackBar(
+          content: Text(state.mode == ImportMode.merge
+              ? '已在现有课表中追加 $count 门课程'
+              : '已用 $count 门课程替换当前课表'),
+        ),
       );
       context.pop();
     }

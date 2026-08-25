@@ -30,6 +30,7 @@ class ImportState {
   final int importedCount;
   final List<String> skipped;
   final int totalWeeks;
+  final ImportMode mode;
 
   const ImportState({
     this.status = ImportStatus.idle,
@@ -38,6 +39,7 @@ class ImportState {
     this.importedCount = 0,
     this.skipped = const [],
     this.totalWeeks = 18,
+    this.mode = ImportMode.replace,
   });
 
   ImportState copyWith({
@@ -47,6 +49,7 @@ class ImportState {
     int? importedCount,
     List<String>? skipped,
     int? totalWeeks,
+    ImportMode? mode,
   }) =>
       ImportState(
         status: status ?? this.status,
@@ -55,6 +58,7 @@ class ImportState {
         importedCount: importedCount ?? this.importedCount,
         skipped: skipped ?? this.skipped,
         totalWeeks: totalWeeks ?? this.totalWeeks,
+        mode: mode ?? this.mode,
       );
 
   int get selectedCount => courses.where((c) => c.selected).length;
@@ -141,6 +145,8 @@ class ImportNotifier extends StateNotifier<ImportState> {
   }
 
   /// 用勾选的课程替换当前学期课表（每条生成新 id）。
+  void setMode(ImportMode mode) => state = state.copyWith(mode: mode);
+
   Future<void> confirmImport() async {
     final toImport = state.courses.where((c) => c.selected).toList();
     if (toImport.isEmpty) return;
@@ -154,7 +160,13 @@ class ImportNotifier extends StateNotifier<ImportState> {
     final replacements = toImport
         .map((course) => course.toCourse(semester.id).copyWith(id: uuid.v4()))
         .toList(growable: false);
-    await repo.replaceForSemester(semester.id, replacements);
+
+    // 合并：保留现有课程；替换：整体覆盖，都不影响其他学期课程。
+    if (state.mode == ImportMode.merge) {
+      await repo.addCourses(semester.id, replacements);
+    } else {
+      await repo.replaceForSemester(semester.id, replacements);
+    }
     final count = replacements.length;
 
     // 课程流由 drift watch 自动发射新数据，无需手动 invalidate；
