@@ -37,7 +37,9 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   bool _extracting = false;
   List<ExtractedCourse> _courses = [];
   final Set<int> _selectedIndices = {};
+  final TextEditingController _schoolSearchController = TextEditingController();
   int _skippedCount = 0;
+  String _schoolQuery = '';
 
   // ── 阶段：select -> login -> preview ──
   _Phase _phase = _Phase.select;
@@ -55,6 +57,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   @override
   void dispose() {
     unawaited(_orientationController.leaveCaptureMode());
+    _schoolSearchController.dispose();
     super.dispose();
   }
 
@@ -113,6 +116,13 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   // ── 学校选择 ──
   Widget _buildSchoolSelector() {
     final theme = Theme.of(context);
+    final query = _schoolQuery.trim().toLowerCase();
+    final eliteMatches = eliteUniversityAdapters
+        .where((adapter) => _matchesSchool(adapter, query))
+        .toList(growable: false);
+    final otherMatches = otherSchoolAdapters
+        .where((adapter) => _matchesSchool(adapter, query))
+        .toList(growable: false);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -137,19 +147,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        Text('内置学校',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            )),
-        const SizedBox(height: 8),
-        ...schoolAdapters.map(
-          (adapter) => _SchoolCard(
-            adapter: adapter,
-            onTap: () => _startLogin(adapter),
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text('通用',
+        Text('通用入口',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w600,
             )),
@@ -157,6 +155,76 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         _CustomUrlCard(onSubmit: (url) {
           _startLogin(createGenericAdapter(url));
         }),
+        const SizedBox(height: 16),
+        Text('选择学校',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            )),
+        const SizedBox(height: 8),
+        TextField(
+          key: const Key('school-search-field'),
+          controller: _schoolSearchController,
+          onChanged: (value) => setState(() => _schoolQuery = value),
+          decoration: InputDecoration(
+            hintText: '搜索学校或教务系统',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _schoolQuery.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: '清空搜索',
+                    onPressed: () {
+                      _schoolSearchController.clear();
+                      setState(() => _schoolQuery = '');
+                    },
+                    icon: const Icon(Icons.clear),
+                  ),
+            border: const OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (eliteMatches.isNotEmpty) ...[
+          Text(
+            '985 高校（${eliteMatches.length}/${eliteUniversityAdapters.length}）',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...eliteMatches.map(
+            (adapter) => _SchoolCard(
+              adapter: adapter,
+              onTap: () => _startLogin(adapter),
+            ),
+          ),
+        ],
+        if (otherMatches.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            '其他专用适配',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...otherMatches.map(
+            (adapter) => _SchoolCard(
+              adapter: adapter,
+              onTap: () => _startLogin(adapter),
+            ),
+          ),
+        ],
+        if (eliteMatches.isEmpty && otherMatches.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Text(
+              '没有匹配的学校，可使用上方自定义 URL。',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -175,7 +243,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '如果没有你的学校，请在应用商店或 GitHub 给我留言，我会尽快进行适配。',
+                  '已收录全部 39 所 985 高校。标记“系统兼容”的学校复用对应教务产品规则；'
+                  '如页面升级后无法抓取，请通过应用商店或 GitHub 反馈学校与课表页信息。',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSecondaryContainer,
                   ),
@@ -187,6 +256,13 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         const SizedBox(height: 24),
       ],
     );
+  }
+
+  bool _matchesSchool(SchoolAdapter adapter, String query) {
+    if (query.isEmpty) return true;
+    return adapter.schoolName.toLowerCase().contains(query) ||
+        adapter.systemName.toLowerCase().contains(query) ||
+        adapter.loginUrl.toLowerCase().contains(query);
   }
 
   // ── WebView 登录 ──
@@ -711,6 +787,22 @@ class _SchoolCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         )),
                     const SizedBox(height: 2),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          adapter.systemName,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        _SupportBadge(level: adapter.supportLevel),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
                     Text(
                       adapter.loginUrl,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -729,6 +821,35 @@ class _SchoolCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SupportBadge extends StatelessWidget {
+  final AdapterSupportLevel level;
+
+  const _SupportBadge({required this.level});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = switch (level) {
+      AdapterSupportLevel.schoolVerified => '专用',
+      AdapterSupportLevel.systemCompatible => '系统兼容',
+      AdapterSupportLevel.generic => '通用抓取',
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onSecondaryContainer,
         ),
       ),
     );

@@ -30,7 +30,16 @@ class GenericAdapter extends SchoolAdapter {
   GenericAdapter({required String url}) : _url = url;
 
   @override
-  String get extractJs => r'''
+  AdapterSupportLevel get supportLevel => AdapterSupportLevel.generic;
+
+  @override
+  String get systemName => '通用抓取';
+
+  @override
+  String get extractJs => commonExtractJs;
+
+  /// 可供按学校配置的适配器复用的通用 DOM 抽取脚本。
+  static const String commonExtractJs = r'''
 (function() {
   var results = [];
   var dayMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7};
@@ -68,22 +77,30 @@ class GenericAdapter extends SchoolAdapter {
   var rows = table.querySelectorAll('tbody tr, tr');
   var hasDataAttrs = false;
   rows.forEach(function(row) {
-    if (row.getAttribute('data-week') || row.getAttribute('data-day')) hasDataAttrs = true;
+    if (row.getAttribute('data-week') || row.getAttribute('data-day') ||
+        row.getAttribute('data-weekday') ||
+        row.querySelector('[data-week], [data-day], [data-weekday], [data-begin-unit]')) {
+      hasDataAttrs = true;
+    }
   });
 
   if (hasDataAttrs) {
     rows.forEach(function(row) {
-      var day = parseInt(row.getAttribute('data-week') || row.getAttribute('data-day') || '0');
-      if (day < 1 || day > 7) {
-        // 兼容 0-indexed
-        if (day >= 0 && day <= 6) day = day + 1;
-        else return;
-      }
       var cells = row.querySelectorAll('td');
       cells.forEach(function(cell) {
+        var rawDay = cell.getAttribute('data-week') ||
+                     cell.getAttribute('data-day') ||
+                     cell.getAttribute('data-weekday') ||
+                     row.getAttribute('data-week') ||
+                     row.getAttribute('data-day') ||
+                     row.getAttribute('data-weekday') || '';
+        var day = parseDay(rawDay);
+        if (day < 1 || day > 7) return;
         var beginUnit = parseInt(cell.getAttribute('data-begin-unit') ||
+                                 cell.getAttribute('data-start-section') ||
                                  row.getAttribute('data-begin-unit') || '0');
         var endUnit = parseInt(cell.getAttribute('data-end-unit') ||
+                               cell.getAttribute('data-end-section') ||
                                row.getAttribute('data-end-unit') || '0');
         if (beginUnit < 1) return;
         if (endUnit < beginUnit) endUnit = beginUnit;
@@ -114,32 +131,55 @@ class GenericAdapter extends SchoolAdapter {
 
   // ═══ 策略2：传统表格（行=节次，列=星期） ═══
   if (results.length === 0) {
-    var allRows = table.querySelectorAll('tr');
-    // 先检测表头行，确定星期列的起始位置
-    var dayColStart = 1; // 默认第1列是节次编号，第2-8列是周一到周日
-    var headerRow = allRows.length > 0 ? allRows[0] : null;
-    if (headerRow) {
-      var headerCells = headerRow.querySelectorAll('th, td');
-      for (var hi = 0; hi < headerCells.length; hi++) {
-        var ht = (headerCells[hi].textContent || '').trim();
-        var hdm = ht.match(/周([一二三四五六日天])/) || ht.match(/星期([一二三四五六日天])/);
-        if (hdm && dayMap[hdm[1]]) { dayColStart = hi; break; }
+    var grid = parseTableToGrid(table);
+    var headerIndex = 0;
+    var dayColumns = {};
+
+    // 在前几行寻找真实星期表头，兼容标题行和多级表头。
+    for (var hr = 0; hr < grid.length && hr < 6; hr++) {
+      if (!grid[hr]) continue;
+      var foundDays = 0;
+      for (var hc = 0; hc < grid[hr].length; hc++) {
+        var headerCell = grid[hr][hc];
+        if (!headerCell) continue;
+        var headerDay = parseDay(headerCell.text);
+        if (headerDay > 0) {
+          dayColumns[hc] = headerDay;
+          foundDays++;
+        }
+      }
+      if (foundDays >= 5) {
+        headerIndex = hr;
+        break;
       }
     }
 
-    for (var r = 1; r < allRows.length; r++) {
-      var cells = allRows[r].querySelectorAll('td');
-      if (cells.length < 2) continue;
-      var sectionText = cells[0] ? cells[0].textContent.trim() : '';
-      var sectionNum = parseInt(sectionText) || r;
+    // 无可识别表头时采用最常见的第 2-8 逻辑列。
+    if (Object.keys(dayColumns).length === 0) {
+      for (var dc = 1; dc <= 7; dc++) dayColumns[dc] = dc;
+    }
 
-      for (var c = dayColStart; c < cells.length && c < dayColStart + 7; c++) {
-        var dayIdx = c - dayColStart + 1;
-        var cellText = cells[c] ? cells[c].textContent.trim() : '';
+    for (var r = headerIndex + 1; r < grid.length; r++) {
+      if (!grid[r]) continue;
+      var sectionCell = grid[r][0];
+      var sectionValues = parseRange(sectionCell ? sectionCell.text : '');
+      var sectionNum = sectionValues.length > 0 ? sectionValues[0] : r - headerIndex;
+
+      var columnKeys = Object.keys(dayColumns);
+      for (var ci = 0; ci < columnKeys.length; ci++) {
+        var c = parseInt(columnKeys[ci]);
+        var cell = grid[r][c];
+        if (!cell || !cell.isOrigin) continue;
+        var dayIdx = dayColumns[c];
+        var cellText = cell.text;
         if (!cellText || cellText === ' ' || cellText.length < 2) continue;
 
         var parsed = parseCellText(cellText);
         if (!parsed.name) continue;
+
+        var endSection = sectionValues.length > 1
+            ? sectionValues[sectionValues.length - 1]
+            : sectionNum + cell.rowspan - 1;
 
         var key = parsed.name + '|' + dayIdx + '|' + sectionNum + '|' + (parsed.location || '') + '|' + parsed.weeks.join(',');
         if (seen[key]) continue;
@@ -151,7 +191,7 @@ class GenericAdapter extends SchoolAdapter {
           location: parsed.location || null,
           dayOfWeek: dayIdx,
           startSection: sectionNum,
-          endSection: sectionNum,
+          endSection: endSection,
           weeks: parsed.weeks
         });
       }
@@ -207,6 +247,57 @@ class GenericAdapter extends SchoolAdapter {
   return JSON.stringify(results);
 
   // ═══ 工具函数 ═══
+
+  function parseDay(value) {
+    var text = String(value || '').trim();
+    var match = text.match(/(?:周|星期)?([一二三四五六日天])/);
+    if (match && dayMap[match[1]]) return dayMap[match[1]];
+    var number = parseInt(text);
+    if (number >= 1 && number <= 7) return number;
+    // 明确写出 0 时才按 0-indexed 处理，避免空字符串被误判为周一。
+    if (text !== '' && number >= 0 && number <= 6) return number + 1;
+    return 0;
+  }
+
+  function parseTableToGrid(tableNode) {
+    if (!tableNode || !tableNode.querySelectorAll) return [];
+    var tableRows = tableNode.querySelectorAll('tr');
+    var grid = [];
+    for (var rowIndex = 0; rowIndex < tableRows.length; rowIndex++) {
+      var tableCells = tableRows[rowIndex].querySelectorAll('td, th');
+      var columnIndex = 0;
+      if (!grid[rowIndex]) grid[rowIndex] = [];
+      for (var cellIndex = 0; cellIndex < tableCells.length; cellIndex++) {
+        while (grid[rowIndex][columnIndex] !== undefined) columnIndex++;
+        var node = tableCells[cellIndex];
+        var rowspan = parseInt(node.getAttribute('rowspan')) || 1;
+        var colspan = parseInt(node.getAttribute('colspan')) || 1;
+        var value = {
+          text: (node.innerText || node.textContent || '').replace(/\u00a0/g, ' ').trim(),
+          html: node.innerHTML || '',
+          rowspan: rowspan,
+          colspan: colspan,
+          isOrigin: true
+        };
+        for (var rr = 0; rr < rowspan; rr++) {
+          if (!grid[rowIndex + rr]) grid[rowIndex + rr] = [];
+          for (var cc = 0; cc < colspan; cc++) {
+            grid[rowIndex + rr][columnIndex + cc] = rr === 0 && cc === 0
+              ? value
+              : {
+                  text: value.text,
+                  html: value.html,
+                  rowspan: rowspan,
+                  colspan: colspan,
+                  isOrigin: false
+                };
+          }
+        }
+        columnIndex += colspan;
+      }
+    }
+    return grid;
+  }
 
   function parseCellText(text) {
     // 尝试从单元格文本中解析课程信息

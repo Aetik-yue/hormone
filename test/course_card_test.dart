@@ -18,6 +18,8 @@ void main() {
   );
 
   testWidgets('窄课程卡片优先给课程名更多行数且不会溢出', (tester) async {
+    final semantics = tester.ensureSemantics();
+
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -42,8 +44,44 @@ void main() {
     expect(name.data, course.name);
     expect(name.maxLines, 4);
     expect(name.style?.fontSize, 10.5);
+    expect(find.byKey(const Key('course-card-color-rail')), findsOneWidget);
+    expect(find.byKey(const Key('course-card-location')), findsOneWidget);
+    expect(find.byKey(const Key('course-card-teacher')), findsOneWidget);
     expect(find.text('D101'), findsOneWidget);
     expect(find.text('张老师'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('云计算与大数据，周一，第1到2节，D101，张老师'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    semantics.dispose();
+  });
+
+  testWidgets('单节课卡片隐藏地点和教师以保证课程名可读', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 42,
+              height: 48,
+              child: CourseCard(
+                course: course,
+                onTap: _noop,
+                onLongPress: _noop,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('course-card-name')), findsOneWidget);
+    expect(find.byKey(const Key('course-card-location')), findsNothing);
+    expect(find.byKey(const Key('course-card-teacher')), findsNothing);
+    expect(find.text('D101'), findsNothing);
+    expect(find.text('张老师'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -67,6 +105,27 @@ void main() {
         _contrastRatio(foreground, background),
         greaterThanOrEqualTo(4.5),
         reason: '${background.toARGB32().toRadixString(16)} 上的课程文字对比度不足',
+      );
+    }
+  });
+
+  test('低饱和卡面在浅色和深色主题下保持文字对比度', () {
+    const accent = Color(0xFF5B8DEF);
+
+    for (final brightness in Brightness.values) {
+      final scheme = ColorScheme.fromSeed(
+        seedColor: accent,
+        brightness: brightness,
+      );
+      final surface = courseCardSurfaceColor(accent, scheme, brightness);
+      final foreground = courseCardForegroundColor(surface);
+
+      expect(surface, isNot(accent));
+      expect(surface, isNot(scheme.surface));
+      expect(
+        _contrastRatio(foreground, surface),
+        greaterThanOrEqualTo(4.5),
+        reason: '$brightness 主题下的课程文字对比度不足',
       );
     }
   });

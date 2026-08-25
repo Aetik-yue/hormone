@@ -46,26 +46,46 @@ const List<SectionTimeTemplate> sectionTimeTemplates = [
     name: '标准 45 分钟制',
     duration: 45,
     startTimes: {
-      1: '08:00', 2: '08:55', 3: '10:00', 4: '10:55',
-      5: '14:00', 6: '14:55', 7: '16:00', 8: '16:55',
-      9: '19:00', 10: '19:55', 11: '20:50', 12: '21:45',
+      1: '08:00',
+      2: '08:55',
+      3: '10:00',
+      4: '10:55',
+      5: '14:00',
+      6: '14:55',
+      7: '16:00',
+      8: '16:55',
+      9: '19:00',
+      10: '19:55',
+      11: '20:50',
+      12: '21:45',
     },
   ),
   SectionTimeTemplate(
     name: '90 分钟大节课制',
     duration: 90,
     startTimes: {
-      1: '08:00', 2: '09:45', 3: '14:00', 4: '15:45',
-      5: '19:00', 6: '20:45',
+      1: '08:00',
+      2: '09:45',
+      3: '14:00',
+      4: '15:45',
+      5: '19:00',
+      6: '20:45',
     },
   ),
   SectionTimeTemplate(
     name: '50 分钟制',
     duration: 50,
     startTimes: {
-      1: '08:00', 2: '08:55', 3: '10:00', 4: '10:55',
-      5: '14:00', 6: '14:55', 7: '16:00', 8: '16:55',
-      9: '19:00', 10: '19:55',
+      1: '08:00',
+      2: '08:55',
+      3: '10:00',
+      4: '10:55',
+      5: '14:00',
+      6: '14:55',
+      7: '16:00',
+      8: '16:55',
+      9: '19:00',
+      10: '19:55',
     },
   ),
 ];
@@ -88,8 +108,25 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
   static Map<int, SectionTime> _defaultMap() => {
         for (var i = 1; i <= AppConstants.maxSections; i++)
           i: SectionTime(
-              AppConstants.sectionStartTimes[i] ?? '', AppConstants.defaultSectionDuration),
+            AppConstants.sectionStartTimes[i] ?? '',
+            AppConstants.defaultSectionDuration,
+          ),
       };
+
+  /// 把任意历史长度的配置补齐到当前节次上限，升级时保留用户已有设置。
+  static Map<int, SectionTime> _normalizedMap(List<String> stored) {
+    final map = _defaultMap();
+    final count = stored.length.clamp(0, AppConstants.maxSections);
+    for (var i = 0; i < count; i++) {
+      final parts = stored[i].split(',');
+      final start = parts.first;
+      final duration = parts.length == 2
+          ? int.tryParse(parts[1]) ?? AppConstants.defaultSectionDuration
+          : AppConstants.defaultSectionDuration;
+      map[i + 1] = SectionTime(start, duration);
+    }
+    return map;
+  }
 
   Future<void> _init() async {
     await _migrateOldData();
@@ -100,11 +137,8 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
   Future<void> _migrateOldData() async {
     final prefs = await SharedPreferences.getInstance();
     final oldData = prefs.getStringList(_oldPrefKey);
-    if (oldData != null && oldData.length == AppConstants.maxSections) {
-      final map = <int, SectionTime>{};
-      for (var i = 0; i < oldData.length; i++) {
-        map[i + 1] = SectionTime(oldData[i], AppConstants.defaultSectionDuration);
-      }
+    if (oldData != null && oldData.isNotEmpty) {
+      final map = _normalizedMap(oldData);
       state = map;
       await _persist(map);
       await prefs.remove(_oldPrefKey);
@@ -114,18 +148,13 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getStringList(_prefKey);
-    if (stored != null && stored.length == AppConstants.maxSections) {
+    if (stored != null && stored.isNotEmpty) {
       try {
-        final map = <int, SectionTime>{};
-        for (var i = 0; i < stored.length; i++) {
-          final parts = stored[i].split(',');
-          final start = parts[0];
-          final duration = parts.length == 2
-              ? int.tryParse(parts[1]) ?? AppConstants.defaultSectionDuration
-              : AppConstants.defaultSectionDuration;
-          map[i + 1] = SectionTime(start, duration);
-        }
+        final map = _normalizedMap(stored);
         state = map;
+        if (stored.length != AppConstants.maxSections) {
+          await _persist(map);
+        }
       } catch (e) {
         // Parsing failed — keep default state
         debugPrint('Failed to parse saved section times: $e');
@@ -136,7 +165,8 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
   /// 更新某一节的开始时间。
   Future<void> setSectionStart(int section, String time) async {
     final updated = Map<int, SectionTime>.from(state);
-    final current = updated[section] ?? SectionTime(time, AppConstants.defaultSectionDuration);
+    final current = updated[section] ??
+        SectionTime(time, AppConstants.defaultSectionDuration);
     updated[section] = SectionTime(time, current.durationMinutes);
     state = updated;
     await _persist(updated);

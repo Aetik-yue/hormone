@@ -7,7 +7,7 @@ import 'package:hormone/core/utils/week_calculator.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/settings/application/section_times_provider.dart';
 
-/// 每节高度（px）。12 节约 672px，超出屏幕时整体可纵向滚动。
+/// 每节高度（px）。16 节约 896px，超出屏幕时网格区可纵向滚动。
 const double _sectionHeight = 56.0;
 
 /// 卡片与节格之间的留白。
@@ -85,6 +85,9 @@ class WeekView extends ConsumerWidget {
               final totalHeight = maxSections * _sectionHeight;
 
               return SingleChildScrollView(
+                key: const Key('week-view-vertical-scroll'),
+                scrollDirection: Axis.vertical,
+                physics: const AlwaysScrollableScrollPhysics(),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -413,32 +416,48 @@ class _TimeAxis extends StatelessWidget {
             height: _sectionHeight,
             child: Padding(
               padding: const EdgeInsets.only(right: 4),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '$section',
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.hintColor),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '$section',
+                        key: ValueKey('section-axis-$section'),
+                        semanticsLabel: '第$section节',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.hintColor,
+                          fontSize: 10,
+                          height: 1,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (startTime.isNotEmpty) const SizedBox(height: 2),
+                      if (startTime.isNotEmpty)
+                        Text(
+                          startTime,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.hintColor,
+                            fontSize: 8.5,
+                            height: 1,
+                          ),
+                        ),
+                      if (endTime.isNotEmpty) const SizedBox(height: 1),
+                      if (endTime.isNotEmpty)
+                        Text(
+                          endTime,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.hintColor,
+                            fontSize: 8.5,
+                            height: 1,
+                          ),
+                        ),
+                    ],
                   ),
-                  if (startTime.isNotEmpty)
-                    Text(
-                      startTime,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.hintColor,
-                        fontSize: 9,
-                      ),
-                    ),
-                  if (endTime.isNotEmpty)
-                    Text(
-                      endTime,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.hintColor,
-                        fontSize: 9,
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
           );
@@ -532,7 +551,9 @@ class _DayColumn extends StatelessWidget {
   }
 }
 
-/// 课程卡片：窄列自适应留白和行数，优先展示课程名，再按高度展示教室/教师。
+/// 课程卡片：用课程色时间轨建立识别，低饱和卡面承载文字。
+///
+/// 窄列优先把高度留给课程名；卡片足够高时再依次展示教室、教师。
 class CourseCard extends StatelessWidget {
   final Course course;
   final VoidCallback onTap;
@@ -546,90 +567,170 @@ class CourseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Color(course.colorValue);
-    final fg = courseCardForegroundColor(color);
+    final theme = Theme.of(context);
+    final accent = Color(course.colorValue);
+    final surface = courseCardSurfaceColor(
+      accent,
+      theme.colorScheme,
+      theme.brightness,
+    );
+    final foreground = courseCardForegroundColor(surface);
+    final border = Color.alphaBlend(
+      accent.withAlpha(theme.brightness == Brightness.dark ? 138 : 112),
+      surface,
+    );
 
-    return Material(
-      color: color,
-      borderRadius: BorderRadius.circular(10),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compactWidth = constraints.maxWidth < 56;
-            final showLocation = constraints.maxHeight >= 64 &&
-                course.location != null &&
-                course.location!.isNotEmpty;
-            final showTeacher = constraints.maxHeight >= 92 &&
-                course.teacher != null &&
-                course.teacher!.isNotEmpty;
-            final fontSize = compactWidth ? 10.5 : 11.5;
-            final detailHeight =
-                (showLocation ? 14.0 : 0) + (showTeacher ? 13.0 : 0);
-            final titleHeight = constraints.maxHeight - 8 - detailHeight;
-            final titleLines =
-                (titleHeight / (fontSize * 1.08)).floor().clamp(1, 4);
+    return Semantics(
+      container: true,
+      button: true,
+      excludeSemantics: true,
+      label: _semanticLabel,
+      hint: '点击查看详情，长按编辑',
+      child: Material(
+        color: surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: border, width: 0.8),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          overlayColor: WidgetStatePropertyAll(accent.withAlpha(28)),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compactWidth = constraints.maxWidth < 56;
+              final showLocation = constraints.maxHeight >= 64 &&
+                  course.location != null &&
+                  course.location!.trim().isNotEmpty;
+              final showTeacher = constraints.maxHeight >= 92 &&
+                  course.teacher != null &&
+                  course.teacher!.trim().isNotEmpty;
+              final fontSize = compactWidth ? 10.5 : 11.5;
+              final detailHeight =
+                  (showLocation ? 14.0 : 0) + (showTeacher ? 13.0 : 0);
+              final verticalPadding = constraints.maxHeight < 56 ? 3.0 : 5.0;
+              final titleHeight =
+                  constraints.maxHeight - verticalPadding * 2 - detailHeight;
+              final titleLines =
+                  (titleHeight / (fontSize * 1.08)).floor().clamp(1, 4);
 
-            return Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: compactWidth ? 3 : 5,
-                vertical: 4,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              return Stack(
                 children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Text(
-                        course.name,
-                        key: const Key('course-card-name'),
-                        maxLines: titleLines,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: fontSize,
-                          height: 1.08,
-                          letterSpacing: compactWidth ? -0.35 : -0.15,
-                          fontWeight: FontWeight.w700,
-                          color: fg,
-                        ),
+                  Positioned(
+                    key: const Key('course-card-color-rail'),
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: compactWidth ? 3 : 4,
+                    child: ColoredBox(color: accent),
+                  ),
+                  Positioned.fill(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        compactWidth ? 6 : 8,
+                        verticalPadding,
+                        compactWidth ? 3 : 5,
+                        verticalPadding,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: Text(
+                                course.name,
+                                key: const Key('course-card-name'),
+                                maxLines: titleLines,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: fontSize,
+                                  height: 1.08,
+                                  letterSpacing: compactWidth ? -0.35 : -0.15,
+                                  fontWeight: FontWeight.w700,
+                                  color: foreground,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (showLocation)
+                            _CourseCardMeta(
+                              key: const Key('course-card-location'),
+                              value: course.location!.trim(),
+                              color: foreground,
+                              fontSize: compactWidth ? 9 : 9.5,
+                            ),
+                          if (showTeacher)
+                            _CourseCardMeta(
+                              key: const Key('course-card-teacher'),
+                              value: course.teacher!.trim(),
+                              color: foreground,
+                              fontSize: compactWidth ? 8.5 : 9,
+                            ),
+                        ],
                       ),
                     ),
                   ),
-                  if (showLocation)
-                    Text(
-                      course.location!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compactWidth ? 9 : 9.5,
-                        height: 1.15,
-                        fontWeight: FontWeight.w500,
-                        color: fg,
-                      ),
-                    ),
-                  if (showTeacher)
-                    Text(
-                      course.teacher!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compactWidth ? 8.5 : 9,
-                        height: 1.15,
-                        fontWeight: FontWeight.w500,
-                        color: fg,
-                      ),
-                    ),
                 ],
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
   }
+
+  String get _semanticLabel {
+    final details = <String>[
+      course.name,
+      '周${WeekView._dayLabels[course.dayOfWeek - 1]}',
+      '第${course.startSection}到${course.endSection}节',
+      if (course.location != null && course.location!.trim().isNotEmpty)
+        course.location!.trim(),
+      if (course.teacher != null && course.teacher!.trim().isNotEmpty)
+        course.teacher!.trim(),
+    ];
+    return details.join('，');
+  }
+}
+
+class _CourseCardMeta extends StatelessWidget {
+  final String value;
+  final Color color;
+  final double fontSize;
+
+  const _CourseCardMeta({
+    super.key,
+    required this.value,
+    required this.color,
+    required this.fontSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: fontSize,
+        height: 1.15,
+        fontWeight: FontWeight.w600,
+        color: color,
+      ),
+    );
+  }
+}
+
+/// 将课程色混入主题表面，降低一屏七列课程块的色彩噪声。
+Color courseCardSurfaceColor(
+  Color accent,
+  ColorScheme colorScheme,
+  Brightness brightness,
+) {
+  final alpha = brightness == Brightness.dark ? 66 : 42;
+  return Color.alphaBlend(accent.withAlpha(alpha), colorScheme.surface);
 }
 
 /// 在深色墨水和白色之间选择对比度更高的课程卡片前景色。

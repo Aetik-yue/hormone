@@ -40,11 +40,31 @@ void main() {
       find.text('登录和浏览保持竖屏；点击抓取时会短暂切换横屏，保证七天课表列位置稳定。'),
       findsOneWidget,
     );
-    expect(
-      find.text('如果没有你的学校，请在应用商店或 GitHub 给我留言，我会尽快进行适配。'),
-      findsOneWidget,
-    );
+    expect(find.text('985 高校（39/39）'), findsOneWidget);
+    expect(find.text('专用适配'), findsOneWidget);
     expect(orientationCalls, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('可按学校名称筛选 985 目录', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: const WebviewImportScreen(),
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('school-search-field')),
+      '浙江大学',
+    );
+    await tester.pump();
+
+    expect(find.text('985 高校（1/39）'), findsOneWidget);
+    expect(find.text('浙江大学'), findsNWidgets(2));
+    expect(find.text('重庆大学'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

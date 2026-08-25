@@ -21,7 +21,8 @@ class AppConstants {
     12: '21:45',
   };
 
-  static const int maxSections = 12;
+  /// 一天最多支持 16 节；13-16 节默认不预设时间，可在设置中按学校作息填写。
+  static const int maxSections = 16;
 
   /// 默认每节课时长（分钟）。
   static const int defaultSectionDuration = 45;
