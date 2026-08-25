@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,10 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:hormone/core/constants/app_constants.dart';
+import 'package:hormone/data/providers/database_providers.dart';
+import 'package:hormone/data/repositories/backup_repository.dart';
+import 'package:hormone/features/semester/application/semester_providers.dart';
+import 'package:hormone/features/widget/application/widget_service.dart';
 import '../application/theme_mode_provider.dart';
 import '../application/section_times_provider.dart';
 import '../application/export_service.dart';
@@ -90,9 +95,16 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.file_upload_outlined),
             title: const Text('导出备份'),
-            subtitle: const Text('导出全部学期和课程为 JSON 文件'),
+            subtitle: const Text('把全部学期和课程导出并分享保存'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _exportData(context, ref),
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings_backup_restore),
+            title: const Text('从备份恢复'),
+            subtitle: const Text('用导出的 JSON 文件替换当前全部数据'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _restoreData(context, ref),
           ),
           const Divider(height: 1),
 
@@ -150,14 +162,83 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _exportData(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final path = await ref.read(exportServiceProvider).exportToJson();
-      messenger.showSnackBar(
-        SnackBar(content: Text('已导出到：$path')),
-      );
+      await ref.read(exportServiceProvider).exportToJson();
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(content: Text('导出失败：$e')),
       );
+    }
+  }
+
+  /// 选择备份文件 → 确认覆盖 → 全量恢复。
+  Future<void> _restoreData(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('无法读取所选文件')));
+      return;
+    }
+
+    if (!context.mounted) return;
+    // 解析校验：先确认这是合法备份，再询问是否覆盖（避免覆盖后才发现文件无效）。
+    final String jsonText;
+    final int previewSemesters;
+    try {
+      jsonText = String.fromCharCodes(bytes);
+      final parsed = BackupFile.parse(jsonText);
+      previewSemesters = parsed.semesters.length;
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('备份文件无效：$e')),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('恢复备份？'),
+        content: Text(
+          '将用备份中的 $previewSemesters 个学期替换当前全部学期和课程，'
+          '此操作不可撤销。确定继续吗？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('恢复'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !context.mounted) return;
+
+    try {
+      final result2 =
+          await ref.read(backupRepositoryProvider).restore(jsonText);
+      // 刷新依赖学期/课程数据的全部 Provider。
+      ref.invalidate(activeSemesterProvider);
+      ref.invalidate(scheduleCoursesProvider);
+      ref.invalidate(semestersProvider);
+      ref.read(widgetServiceProvider).updateTodayWidget();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+              '已恢复 ${result2.semesterCount} 个学期、${result2.courseCount} 门课程'),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('恢复失败：$e')));
     }
   }
 }
