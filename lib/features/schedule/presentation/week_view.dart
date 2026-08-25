@@ -42,6 +42,10 @@ class WeekView extends ConsumerWidget {
     final todayWeekday = now.weekday; // 1..7
     final maxSections = sectionTimes.length;
 
+    // 节高随系统字号缩放（clamp 1.0–1.6）：大字号下自动加高避免挤压。
+    final sectionHeight = _sectionHeight *
+        (MediaQuery.textScalerOf(context).scale(12) / 12).clamp(1.0, 1.6);
+
     // 学期开学日期，用于推算选中周每天的实际日期。
     final semesterStart =
         ref.watch(activeSemesterProvider).valueOrNull?.startDate;
@@ -83,7 +87,7 @@ class WeekView extends ConsumerWidget {
                 byDay[c.dayOfWeek]?.add(c);
               }
 
-              final totalHeight = maxSections * _sectionHeight;
+              final totalHeight = maxSections * sectionHeight;
 
               return SingleChildScrollView(
                 key: const Key('week-view-vertical-scroll'),
@@ -94,6 +98,7 @@ class WeekView extends ConsumerWidget {
                   children: [
                     _TimeAxis(
                       totalHeight: totalHeight,
+                      sectionHeight: sectionHeight,
                       sectionTimes: sectionTimes,
                     ),
                     Expanded(
@@ -104,6 +109,7 @@ class WeekView extends ConsumerWidget {
                           return Expanded(
                             child: _DayColumn(
                               day: day,
+                              sectionHeight: sectionHeight,
                               isToday: isCurrentWeek && day == todayWeekday,
                               courses: byDay[day]!,
                               totalHeight: totalHeight,
@@ -228,9 +234,11 @@ class _DayHeaderRow extends StatelessWidget {
 /// 左侧节次 + 该节起止时间（上下排列，使用自定义时间表）。
 class _TimeAxis extends StatelessWidget {
   final double totalHeight;
+  final double sectionHeight;
   final Map<int, SectionTime> sectionTimes;
   const _TimeAxis({
     required this.totalHeight,
+    required this.sectionHeight,
     required this.sectionTimes,
   });
 
@@ -248,10 +256,10 @@ class _TimeAxis extends StatelessWidget {
           final startTime = sectionTime?.startTime ?? '';
           final endTime = sectionTime?.endTime ?? '';
           return Positioned(
-            top: i * _sectionHeight,
+            top: i * sectionHeight,
             left: 0,
             right: 0,
-            height: _sectionHeight,
+            height: sectionHeight,
             child: Padding(
               padding: const EdgeInsets.only(right: 4),
               child: Align(
@@ -310,6 +318,7 @@ class _DayColumn extends StatelessWidget {
   final int day;
   final bool isToday;
   final List<Course> courses;
+  final double sectionHeight;
   final double totalHeight;
   final void Function(Course) onTapCourse;
   final void Function(Course) onLongPressCourse;
@@ -318,6 +327,7 @@ class _DayColumn extends StatelessWidget {
     required this.day,
     required this.isToday,
     required this.courses,
+    required this.sectionHeight,
     required this.totalHeight,
     required this.onTapCourse,
     required this.onLongPressCourse,
@@ -329,7 +339,7 @@ class _DayColumn extends StatelessWidget {
     final gridColor = theme.colorScheme.outlineVariant.withAlpha(
       theme.brightness == Brightness.dark ? 76 : 92,
     );
-    final sectionCount = (totalHeight / _sectionHeight).round();
+    final sectionCount = (totalHeight / sectionHeight).round();
     return Container(
       height: totalHeight,
       clipBehavior: Clip.antiAlias,
@@ -351,7 +361,7 @@ class _DayColumn extends StatelessWidget {
                 children: List.generate(
                   sectionCount,
                   (_) => SizedBox(
-                    height: _sectionHeight,
+                    height: sectionHeight,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         border: Border(
@@ -365,9 +375,9 @@ class _DayColumn extends StatelessWidget {
             ),
           ),
           ...courses.map((c) {
-            final top = (c.startSection - 1) * _sectionHeight + _cardInset;
+            final top = (c.startSection - 1) * sectionHeight + _cardInset;
             final height =
-                (c.endSection - c.startSection + 1) * _sectionHeight -
+                (c.endSection - c.startSection + 1) * sectionHeight -
                     _cardInset * 2;
             return Positioned(
               key: ValueKey(c.id),
