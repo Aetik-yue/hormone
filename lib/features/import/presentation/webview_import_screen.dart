@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,8 +11,11 @@ import 'package:hormone/core/constants/app_constants.dart';
 import 'package:hormone/core/models/course.dart';
 import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/features/import/application/course_capture_orientation.dart';
+import 'package:hormone/features/import/application/webview_import_provider.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
+import 'package:hormone/features/settings/application/section_times_provider.dart';
 import '../data/school_adapter.dart';
+import 'import_preview_list.dart';
 
 /// WebView 教务系统导入页：选学校 -> 登录 -> 自动抓取 -> 预览 -> 导入。
 class WebviewImportScreen extends ConsumerStatefulWidget {
@@ -33,19 +35,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   late final CourseCaptureOrientationController _orientationController;
   SchoolAdapter? _adapter;
   WebViewController? _controller;
-  bool _loading = true;
-  bool _extracting = false;
-  List<ExtractedCourse> _courses = [];
-  final Set<int> _selectedIndices = {};
   final TextEditingController _schoolSearchController = TextEditingController();
-  int _skippedCount = 0;
   String _schoolQuery = '';
-
-  // ── 阶段：select -> login -> preview ──
-  _Phase _phase = _Phase.select;
-
-  /// 导航到课表页后的自动重试次数（frame 内导航不触发 onPageFinished）。
-  int _navRetry = 0;
 
   @override
   void initState() {
@@ -63,11 +54,12 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final state = ref.watch(webviewImportProvider);
     return Scaffold(
       appBar: AppBar(
-        title: Text(_phase == _Phase.select
+        title: Text(state.phase == WebviewPhase.select
             ? '从教务系统导入'
-            : _phase == _Phase.login
+            : state.phase == WebviewPhase.login
                 ? (_adapter?.schoolName ?? '登录')
                 : '选择导入课程'),
         leading: IconButton(
@@ -80,36 +72,37 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             tooltip: '课程抓取说明',
             onPressed: () => context.push('/import/guide'),
           ),
-          if (_phase == _Phase.login)
+          if (state.phase == WebviewPhase.login)
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: '刷新',
               onPressed: () => _controller?.reload(),
             ),
-          if (_phase == _Phase.login)
+          if (state.phase == WebviewPhase.login)
             TextButton(
-              onPressed: _extracting ? null : _tryExtract,
+              onPressed: state.extracting ? null : _tryExtract,
               child: const Text('抓取课表'),
             ),
-          if (_phase == _Phase.preview)
+          if (state.phase == WebviewPhase.preview)
             TextButton(
-              onPressed: _selectedIndices.isEmpty ? null : _importSelected,
-              child: Text('导入 (${_selectedIndices.length})'),
+              onPressed:
+                  state.selectedCount == 0 ? null : _importSelected,
+              child: Text('导入 (${state.selectedCount})'),
             ),
         ],
       ),
-      body: _buildBody(),
+      body: _buildBody(state),
     );
   }
 
-  Widget _buildBody() {
-    switch (_phase) {
-      case _Phase.select:
+  Widget _buildBody(WebviewImportState state) {
+    switch (state.phase) {
+      case WebviewPhase.select:
         return _buildSchoolSelector();
-      case _Phase.login:
-        return _buildWebView();
-      case _Phase.preview:
-        return _buildPreview();
+      case WebviewPhase.login:
+        return _buildWebView(state);
+      case WebviewPhase.preview:
+        return _buildPreview(state);
     }
   }
 
@@ -266,13 +259,13 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   }
 
   // ── WebView 登录 ──
-  Widget _buildWebView() {
+  Widget _buildWebView(WebviewImportState state) {
     if (_controller == null) return const SizedBox.shrink();
     final theme = Theme.of(context);
     return Stack(
       children: [
         WebViewWidget(controller: _controller!),
-        if (_loading || _extracting)
+        if (state.loading || state.extracting)
           Container(
             color: theme.colorScheme.scrim.withAlpha(74),
             child: Center(
@@ -284,7 +277,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
                     children: [
                       const CircularProgressIndicator(),
                       const SizedBox(height: 12),
-                      Text(_extracting ? '正在抓取课表...' : '加载中...'),
+                      Text(state.extracting ? '正在抓取课表...' : '加载中...'),
                     ],
                   ),
                 ),
@@ -296,8 +289,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   }
 
   // ── 预览列表 ──
-  Widget _buildPreview() {
-    if (_courses.isEmpty) {
+  Widget _buildPreview(WebviewImportState state) {
+    if (state.courses.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -307,7 +300,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
               Icon(Icons.search_off,
                   size: 56, color: Theme.of(context).colorScheme.outline),
               const SizedBox(height: 16),
-              Text('未抓取到课程数据', style: Theme.of(context).textTheme.titleMedium),
+              Text('未抓取到课程数据',
+                  style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
                 '请确认已登录并进入课表页面，然后点击右上角「抓取课表」',
@@ -316,7 +310,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
               ),
               const SizedBox(height: 20),
               FilledButton.tonal(
-                onPressed: () => setState(() => _phase = _Phase.login),
+                onPressed: () =>
+                    ref.read(webviewImportProvider.notifier).backToLogin(),
                 child: const Text('返回重试'),
               ),
             ],
@@ -326,13 +321,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     }
 
     final theme = Theme.of(context);
-    // 按星期分组
-    final grouped = <int, List<int>>{};
-    for (var i = 0; i < _courses.length; i++) {
-      grouped.putIfAbsent(_courses[i].dayOfWeek, () => []).add(i);
-    }
-    final sortedDays = grouped.keys.toList()..sort();
-
+    final notifier = ref.read(webviewImportProvider.notifier);
     return Column(
       children: [
         Container(
@@ -341,28 +330,23 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
               .withAlpha((0.5 * 255).round()),
           child: Row(
             children: [
-              Text('共 ${_courses.length} 门课程',
+              Text('共 ${state.courses.length} 门课程',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   )),
               const Spacer(),
               TextButton.icon(
-                onPressed: () => setState(() {
-                  if (_selectedIndices.length == _courses.length) {
-                    _selectedIndices.clear();
-                  } else {
-                    _selectedIndices
-                        .addAll(List.generate(_courses.length, (i) => i));
-                  }
-                }),
+                onPressed: () => notifier.toggleSelectAll(),
                 icon: Icon(
-                  _selectedIndices.length == _courses.length
+                  state.selectedCount == state.courses.length
                       ? Icons.deselect
                       : Icons.select_all,
                   size: 18,
                 ),
                 label: Text(
-                    _selectedIndices.length == _courses.length ? '取消全选' : '全选'),
+                    state.selectedCount == state.courses.length
+                        ? '取消全选'
+                        : '全选'),
               ),
             ],
           ),
@@ -378,7 +362,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             ),
           ),
         ),
-        if (_skippedCount > 0)
+        if (state.skippedCount > 0)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -391,7 +375,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '有 $_skippedCount 门课程无法识别星期，已跳过',
+                    '有 ${state.skippedCount} 门课程无法识别星期，已跳过',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.error,
                     ),
@@ -401,26 +385,9 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             ),
           ),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: sortedDays.length,
-            itemBuilder: (context, dayIdx) {
-              final day = sortedDays[dayIdx];
-              final indices = grouped[day]!;
-              return _DayGroup(
-                day: day,
-                indices: indices,
-                courses: _courses,
-                selectedIndices: _selectedIndices,
-                onToggle: (i) => setState(() {
-                  if (_selectedIndices.contains(i)) {
-                    _selectedIndices.remove(i);
-                  } else {
-                    _selectedIndices.add(i);
-                  }
-                }),
-              );
-            },
+          child: ImportPreviewList(
+            courses: state.courses,
+            onToggle: notifier.toggle,
           ),
         ),
       ],
@@ -443,9 +410,10 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
     controller.setNavigationDelegate(
       NavigationDelegate(
-        onPageStarted: (_) => setState(() => _loading = true),
+        onPageStarted: (_) =>
+            ref.read(webviewImportProvider.notifier).setLoading(true),
         onPageFinished: (url) {
-          setState(() => _loading = false);
+          ref.read(webviewImportProvider.notifier).setLoading(false);
           // 不注入 width=device-width 的 viewport：教务系统课表需要桌面宽度渲染，
           // 强制 device-width 会把表格挤成一团。浏览器默认以 ~980px 桌面宽度渲染
           // 并缩放适配屏幕，用户可双指缩放查看细节。
@@ -465,11 +433,9 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
           .setMediaPlaybackRequiresUserGesture(false);
     }
 
-    setState(() {
-      _adapter = adapter;
-      _controller = controller;
-      _phase = _Phase.login;
-    });
+    _adapter = adapter;
+    _controller = controller;
+    ref.read(webviewImportProvider.notifier).startLogin();
   }
 
   Future<bool> _waitForLandscapeLayout() async {
@@ -484,8 +450,11 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
   Future<void> _tryExtract() async {
     if (_adapter == null || _controller == null) return;
-    if (_extracting) return; // 防止 onPageFinished 与手动点击并发
-    setState(() => _extracting = true);
+    final notifier = ref.read(webviewImportProvider.notifier);
+    if (ref.read(webviewImportProvider).extracting) {
+      return; // 防止 onPageFinished 与手动点击并发
+    }
+    notifier.setExtracting(true);
 
     try {
       // 登录和浏览阶段保持正常竖屏，只在坐标敏感的抓取瞬间临时横屏。
@@ -518,25 +487,20 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
       // 注入 JS 提取课程
       final result =
           await _controller!.runJavaScriptReturningResult(_adapter!.extractJs);
+      final decoded = decodeWebviewExtractResult(result);
 
-      var jsonStr = result is String ? result : result.toString();
-      // WebView 可能返回双重编码的 JSON（字符串内再包一层字符串）
-      dynamic decoded = jsonDecode(jsonStr);
-      if (decoded is String) {
-        decoded = jsonDecode(decoded);
-      }
       // 适配器导航/等待信号：已跳转课表页或课表仍在加载，延迟后自动重试
       if (decoded is Map<String, dynamic>) {
         if (decoded['__nav'] == true || decoded['__pending'] == true) {
-          setState(() => _extracting = false);
-          if (_navRetry >= 3) {
-            _navRetry = 0;
+          notifier.setExtracting(false);
+          if (notifier.navRetry >= 3) {
+            notifier.navRetry = 0;
             await _orientationController.leaveCaptureMode();
             if (!mounted) return;
             _showNavFailedDialog();
             return;
           }
-          _navRetry++;
+          notifier.navRetry++;
           await Future.delayed(
             decoded['__nav'] == true
                 ? const Duration(seconds: 3)
@@ -546,22 +510,15 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
           return;
         }
       }
-      _navRetry = 0;
+      notifier.navRetry = 0;
       if (decoded == null) {
         throw Exception('未抓取到课程数据，请确认已进入课表页面后重试');
       }
       if (decoded is! List) {
         throw Exception('课表数据格式异常，请确认已进入课表页面后重试');
       }
-      final List<dynamic> list = decoded;
-      final allExtracted = list
-          .map((e) => ExtractedCourse.fromJson(e as Map<String, dynamic>))
-          .toList();
-      // 过滤掉无法识别星期的课程（dayOfWeek=0 表示 findDay 未能推断）
-      final courses = allExtracted
-          .where((c) => c.dayOfWeek >= 1 && c.dayOfWeek <= 7)
-          .toList();
-      final skippedCount = allExtracted.length - courses.length;
+
+      final (courses, skippedCount) = importCoursesFromDecoded(decoded);
 
       if (courses.isEmpty) {
         // 抓取为空，捕获调试信息
@@ -591,7 +548,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
           })()
         ''');
         final debugStr = debugInfo is String ? debugInfo : debugInfo.toString();
-        setState(() => _extracting = false);
+        notifier.setExtracting(false);
         await _orientationController.leaveCaptureMode();
         if (!mounted) return;
         if (mounted) {
@@ -635,18 +592,9 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
       await _orientationController.leaveCaptureMode();
       if (!mounted) return;
-      setState(() {
-        _courses = courses;
-        _skippedCount = skippedCount;
-        _selectedIndices.clear();
-        _selectedIndices.addAll(List.generate(courses.length, (i) => i));
-        _phase = _Phase.preview;
-        _extracting = false;
-      });
+      notifier.showPreview(courses, skippedCount);
     } catch (e) {
-      if (mounted) {
-        setState(() => _extracting = false);
-      }
+      if (mounted) notifier.setExtracting(false);
       await _orientationController.leaveCaptureMode();
       if (!mounted) return;
       // 跳转进行中注入异常（JS 上下文销毁）时静默等待，onPageFinished 会自动重试
@@ -713,21 +661,28 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     }
 
     final repo = ref.read(courseRepositoryProvider);
+    final sectionTimes = ref.read(sectionTimesProvider);
     final uuid = const Uuid();
+    final state = ref.read(webviewImportProvider);
     final replacements = <Course>[];
-    for (final i in _selectedIndices) {
-      final ec = _courses[i];
-      if (ec.name.isEmpty || ec.weeks.isEmpty) continue;
+    for (final c in state.courses.where((c) => c.selected)) {
+      if (c.name.isEmpty || c.weeks.isEmpty) continue;
+      // 教案上没有直接的时间，但节次时间表已知：startSection 对应开始时间，
+      // endSection 对应结束时间，补上后桌面小组件才能显示具体钟点。
+      final startTime = sectionTimes[c.startSection]?.startTime;
+      final endTime = sectionTimes[c.endSection]?.endTime;
       replacements.add(Course(
         id: uuid.v4(),
         semesterId: semester.id,
-        name: ec.name,
-        teacher: ec.teacher,
-        location: ec.location,
-        dayOfWeek: ec.dayOfWeek,
-        startSection: ec.startSection,
-        endSection: ec.endSection,
-        weeks: ec.weeks,
+        name: c.name,
+        teacher: c.teacher,
+        location: c.location,
+        dayOfWeek: c.dayOfWeek,
+        startSection: c.startSection,
+        endSection: c.endSection,
+        startTime: startTime,
+        endTime: endTime,
+        weeks: c.weeks,
         colorValue: AppConstants.courseAutoColor(replacements.length),
       ));
     }
@@ -744,8 +699,6 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     }
   }
 }
-
-enum _Phase { select, login, preview }
 
 /// 学校卡片。
 class _SchoolCard extends StatelessWidget {
@@ -944,130 +897,6 @@ class _CustomUrlCardState extends State<_CustomUrlCard> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 按星期分组的课程列表。
-class _DayGroup extends StatelessWidget {
-  final int day;
-  final List<int> indices;
-  final List<ExtractedCourse> courses;
-  final Set<int> selectedIndices;
-  final void Function(int index) onToggle;
-
-  const _DayGroup({
-    required this.day,
-    required this.indices,
-    required this.courses,
-    required this.selectedIndices,
-    required this.onToggle,
-  });
-
-  String get _dayLabel {
-    const labels = ['一', '二', '三', '四', '五', '六', '日'];
-    return day >= 1 && day <= 7 ? '周${labels[day - 1]}' : '未知';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Text(
-            _dayLabel,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        ...indices.map((i) {
-          final c = courses[i];
-          final selected = selectedIndices.contains(i);
-          return _CourseTile(
-            course: c,
-            selected: selected,
-            onTap: () => onToggle(i),
-          );
-        }),
-      ],
-    );
-  }
-}
-
-/// 单条课程预览项。
-class _CourseTile extends StatelessWidget {
-  final ExtractedCourse course;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _CourseTile({
-    required this.course,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? theme.colorScheme.primaryContainer
-                  .withAlpha((0.3 * 255).round())
-              : theme.colorScheme.surfaceContainerHighest
-                  .withAlpha((0.3 * 255).round()),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? theme.colorScheme.primary : Colors.transparent,
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              selected ? Icons.check_circle : Icons.radio_button_unchecked,
-              size: 20,
-              color: selected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.outline,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(course.name,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      )),
-                  const SizedBox(height: 2),
-                  Text(
-                    [
-                      '第${course.startSection}-${course.endSection}节',
-                      if (course.location != null) course.location!,
-                      if (course.teacher != null) course.teacher!,
-                      if (course.weeks.isNotEmpty) '${course.weeks.length}周',
-                    ].join('  ·  '),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );

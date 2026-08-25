@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hormone/features/import/application/import_provider.dart';
 import 'package:hormone/features/import/domain/import_course.dart';
+import 'import_preview_list.dart';
 
 /// 课程导入页（Phase 5）。
 /// 流程：选择文件 → 解析 → 预览勾选 → 确认导入。
@@ -168,21 +169,13 @@ class _PreviewList extends ConsumerWidget {
             ),
           ),
         ),
-        if (conflicts.isNotEmpty) _ConflictBanner(names: conflicts),
+        if (conflicts.isNotEmpty) ImportConflictBanner(names: conflicts),
         const Divider(height: 1),
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: state.courses.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final c = state.courses[index];
-              return _CoursePreviewTile(
-                course: c,
-                conflicted: conflicts.contains(c.name),
-                onTap: () => notifier.toggleSelected(index),
-              );
-            },
+          child: ImportPreviewList(
+            courses: state.courses,
+            conflictedNames: conflicts,
+            onToggle: (i) => notifier.toggleSelected(i),
           ),
         ),
       ],
@@ -202,107 +195,6 @@ class _PreviewList extends ConsumerWidget {
       }
     }
     return names;
-  }
-}
-
-/// 导入预览顶部的时间冲突提示条。
-class _ConflictBanner extends StatelessWidget {
-  final Set<String> names;
-  const _ConflictBanner({required this.names});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning_amber_rounded,
-              size: 18, color: theme.colorScheme.error),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '时间冲突：${names.join('、')}（同日同时段重叠）',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CoursePreviewTile extends StatelessWidget {
-  final ImportCourse course;
-  final bool conflicted;
-  final VoidCallback onTap;
-
-  const _CoursePreviewTile({
-    required this.course,
-    this.conflicted = false,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = Color(course.colorValue);
-    final borderColor = conflicted
-        ? theme.colorScheme.error
-        : (course.selected ? color : theme.colorScheme.outlineVariant);
-    return Card(
-      elevation: 0,
-      color: theme.colorScheme.surfaceContainerHighest
-          .withAlpha((0.5 * 255).round()),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: borderColor,
-          width: conflicted || course.selected ? 2 : 1,
-        ),
-      ),
-      child: CheckboxListTile(
-        value: course.selected,
-        onChanged: (_) => onTap(),
-        activeColor: color,
-        title: Row(
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: Text(course.name)),
-            if (conflicted)
-              Icon(Icons.warning_amber_rounded,
-                  size: 16, color: theme.colorScheme.error),
-          ],
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4, left: 18),
-          child: Text(
-            [
-              course.sectionLabel,
-              course.weekLabel,
-              if (course.location != null) course.location!,
-              if (course.teacher != null) course.teacher!,
-            ].join('  ·  '),
-            style: theme.textTheme.bodySmall,
-          ),
-        ),
-        controlAffinity: ListTileControlAffinity.leading,
-      ),
-    );
   }
 }
 
