@@ -19,6 +19,10 @@ import '../data/school_adapter.dart';
 import 'import_confirm_dialog.dart';
 import 'import_preview_list.dart';
 
+/// Android WebView 会把无法重放的无缓存请求报为 ERR_CACHE_MISS。
+bool isWebViewCacheMiss(String description) =>
+    description.toUpperCase().contains('ERR_CACHE_MISS');
+
 /// WebView 教务系统导入页：选学校 -> 登录 -> 自动抓取 -> 预览 -> 导入。
 class WebviewImportScreen extends ConsumerStatefulWidget {
   final CourseCaptureOrientationController? orientationController;
@@ -37,6 +41,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   late final CourseCaptureOrientationController _orientationController;
   SchoolAdapter? _adapter;
   WebViewController? _controller;
+  bool _cacheMissRecoveryAttempted = false;
   final TextEditingController _schoolSearchController = TextEditingController();
   String _schoolQuery = '';
 
@@ -78,7 +83,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: '刷新',
-              onPressed: () => _controller?.reload(),
+              onPressed: _refreshWebView,
             ),
           if (state.phase == WebviewPhase.login)
             TextButton(
@@ -181,7 +186,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         const SizedBox(height: 16),
         if (eliteMatches.isNotEmpty) ...[
           Text(
-            '985 高校（${eliteMatches.length}/${eliteUniversityAdapters.length}）',
+            '重点高校（${eliteMatches.length}/${eliteUniversityAdapters.length}）',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w600,
             ),
@@ -239,8 +244,8 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '已收录全部 39 所 985 高校。标记“系统兼容”的学校复用对应教务产品规则；'
-                  '如页面升级后无法抓取，请通过应用商店或 GitHub 反馈学校与课表页信息。',
+                  '标记“系统兼容”的学校复用对应教务产品规则，标记“专用适配”的学校已针对页面结构调优；'
+                  '如页面升级后无法抓取，或列表中没有你的学校，请通过应用商店或 GitHub 反馈学校与课表页信息。',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSecondaryContainer,
                   ),
@@ -486,10 +491,15 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             _tryExtract();
           }
         },
+        onWebResourceError: (error) {
+          if (error.isForMainFrame != true) return;
+          ref.read(webviewImportProvider.notifier).setLoading(false);
+          if (isWebViewCacheMiss(error.description)) {
+            unawaited(_recoverFromCacheMiss(adapter));
+          }
+        },
       ),
     );
-
-    controller.loadRequest(Uri.parse(adapter.loginUrl));
 
     // Android 平台：允许混合内容（https 页面加载 http 资源）
     if (controller.platform is AndroidWebViewController) {
@@ -499,7 +509,40 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
     _adapter = adapter;
     _controller = controller;
+    _cacheMissRecoveryAttempted = false;
     ref.read(webviewImportProvider.notifier).startLogin();
+    unawaited(_loadFresh(controller, adapter.loginUrl));
+  }
+
+  /// 使用新的 GET 请求打开页面，避免重放登录 POST 导致 ERR_CACHE_MISS。
+  Future<void> _loadFresh(WebViewController controller, String url) {
+    return controller.loadRequest(
+      Uri.parse(url),
+      method: LoadRequestMethod.get,
+    );
+  }
+
+  Future<void> _refreshWebView() async {
+    final controller = _controller;
+    final adapter = _adapter;
+    if (controller == null || adapter == null) return;
+
+    final currentUrl = await controller.currentUrl();
+    final currentUri = currentUrl == null ? null : Uri.tryParse(currentUrl);
+    final canReloadCurrent = currentUri != null &&
+        (currentUri.scheme == 'http' || currentUri.scheme == 'https');
+    _cacheMissRecoveryAttempted = false;
+    await _loadFresh(
+      controller,
+      canReloadCurrent ? currentUri.toString() : adapter.loginUrl,
+    );
+  }
+
+  Future<void> _recoverFromCacheMiss(SchoolAdapter adapter) async {
+    final controller = _controller;
+    if (controller == null || _cacheMissRecoveryAttempted) return;
+    _cacheMissRecoveryAttempted = true;
+    await _loadFresh(controller, adapter.loginUrl);
   }
 
   Future<bool> _waitForLandscapeLayout() async {

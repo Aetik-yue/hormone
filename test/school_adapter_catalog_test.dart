@@ -6,7 +6,7 @@ import 'package:hormone/features/import/data/configured_school_adapter.dart';
 import 'package:hormone/features/import/data/school_adapter.dart';
 
 void main() {
-  const expected985Names = {
+  const expectedKeyUniversityNames = {
     '北京大学',
     '清华大学',
     '中国人民大学',
@@ -48,11 +48,11 @@ void main() {
     '兰州大学',
   };
 
-  test('985 目录完整且没有重复学校', () {
+  test('重点高校目录完整且没有重复学校', () {
     final names = eliteUniversityAdapters.map((e) => e.schoolName).toSet();
 
     expect(eliteUniversityAdapters, hasLength(39));
-    expect(names, expected985Names);
+    expect(names, expectedKeyUniversityNames);
     expect(names, hasLength(eliteUniversityAdapters.length));
   });
 

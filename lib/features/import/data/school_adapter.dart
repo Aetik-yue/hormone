@@ -1,6 +1,7 @@
 import 'cqu_adapter.dart';
 import 'configured_school_adapter.dart';
 import 'generic_adapter.dart';
+import 'jgsu_adapter.dart';
 import 'jufe_adapter.dart';
 import 'ncu_adapter.dart';
 import 'syuct_adapter.dart';
@@ -110,9 +111,8 @@ class ExtractedCourse {
   }
 }
 
-/// 原“985 工程”39 所高校目录。
+/// 重点高校目录（覆盖用户最常用的 39 所「985 工程」高校）。
 ///
-/// “985”不再作为现行建设项目使用，但仍是用户最常用的学校集合称呼。
 /// 重庆大学使用专用适配器，其余学校按公开可确认的教务系统产品类型
 /// 复用系统兼容规则；无法确认产品类型的学校使用通用抓取器。
 final List<SchoolAdapter> eliteUniversityAdapters = List.unmodifiable([
@@ -311,6 +311,7 @@ final List<SchoolAdapter> eliteUniversityAdapters = List.unmodifiable([
 
 /// 已有的其他学校专用适配器。
 final List<SchoolAdapter> otherSchoolAdapters = List.unmodifiable([
+  JgsuAdapter(),
   JufeAdapter(),
   NcuAdapter(),
   SyuctAdapter(),

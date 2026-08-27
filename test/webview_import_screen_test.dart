@@ -9,6 +9,12 @@ import 'package:hormone/features/import/data/cqu_adapter.dart';
 import 'package:hormone/features/import/presentation/webview_import_screen.dart';
 
 void main() {
+  test('WebView 仅将 ERR_CACHE_MISS 识别为可恢复缓存错误', () {
+    expect(isWebViewCacheMiss('net::ERR_CACHE_MISS'), isTrue);
+    expect(isWebViewCacheMiss('Net::Err_Cache_Miss'), isTrue);
+    expect(isWebViewCacheMiss('net::ERR_NAME_NOT_RESOLVED'), isFalse);
+  });
+
   testWidgets('学校 URL 与说明文字使用可读的正文弱化色', (tester) async {
     final orientationCalls = <List<DeviceOrientation>>[];
     final orientationController = CourseCaptureOrientationController(
@@ -40,13 +46,13 @@ void main() {
       find.text('登录和浏览保持竖屏；点击抓取时会短暂切换横屏，保证七天课表列位置稳定。'),
       findsOneWidget,
     );
-    expect(find.text('985 高校（39/39）'), findsOneWidget);
+    expect(find.text('重点高校（39/39）'), findsOneWidget);
     expect(find.text('专用适配'), findsOneWidget);
     expect(orientationCalls, isEmpty);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('可按学校名称筛选 985 目录', (tester) async {
+  testWidgets('可按学校名称筛选高校目录', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
@@ -62,7 +68,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('985 高校（1/39）'), findsOneWidget);
+    expect(find.text('重点高校（1/39）'), findsOneWidget);
     expect(find.text('浙江大学'), findsNWidgets(2));
     expect(find.text('重庆大学'), findsNothing);
     expect(tester.takeException(), isNull);
