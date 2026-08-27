@@ -36,10 +36,9 @@
 
 ### 数据导入
 - **教务系统 WebView 导入**：内置浏览器登录教务系统，自动抓取课表
-  - 重庆大学（金智教务 XCampus）
-  - 江西财经大学（青果教务 KINGOSOFT）
-  - 沈阳化工大学（正方教务 ZFSoft）
-  - 南昌大学（强智教务 QZSoft）
+  - 专用适配：重庆大学（金智 XCampus）、江西财经大学（青果）、沈阳化工大学（正方）、南昌大学（强智）、井冈山大学（金智智慧校园）
+  - 系统兼容：39 所重点高校按公开可确认的教务产品类型复用对应规则（导入页可按学校名 / 系统名 / URL 搜索）
+  - 通用入口：任意教务系统 URL，通用 DOM 抓取器兜底
 - **文件导入**：支持 ICS 日历文件和 JSON 模板批量导入
 - **导入模式**：整体替换 / 合并追加两种模式，合并时与现有课表冲突的课程标红提示
 - **执行确认**：导入前二次确认，明确影响面
@@ -77,31 +76,34 @@
 lib/
 ├── app/              # GoRouter 路由定义
 ├── core/             # 常量、领域模型、主题、工具函数
-│   ├── constants/    # 应用级常量（节次时间表等）
+│   ├── constants/    # 应用级常量（节次时间表、课程配色等）
 │   ├── models/       # 领域模型（Course、Semester）
 │   ├── theme/        # Material 3 主题配色
 │   └── utils/        # 纯函数工具（周次计算等）
 ├── data/             # 数据层
-│   ├── repositories/ # 数据访问（CourseRepository、SemesterRepository）
+│   ├── repositories/ # 数据访问（Course / Semester / Backup Repository）
 │   ├── mappers/      # drift 实体 ↔ 领域模型映射
 │   ├── tables/       # Drift 表定义
 │   └── providers/    # Riverpod Provider
-└── features/         # 功能模块（feature-first）
+└── features/         # 功能模块（feature-first：application/ + presentation/ + 可选 domain//data/）
     ├── course/       # 课程增删改
-    ├── import/       # 文件导入 + 教务系统 WebView 导入
-    ├── schedule/     # 周视图主界面
+    ├── import/       # 文件导入 + 教务系统 WebView 导入（学校适配器在 data/）
+    ├── notification/ # 课前提醒（设置、调度纯函数、通知服务）
+    ├── schedule/     # 周视图主界面（今日视图、课程搜索、详情弹层）
     ├── semester/     # 学期管理
-    ├── settings/     # 设置（主题/节次时间/导入导出）
+    ├── settings/     # 设置（主题/节次时间/提醒/备份恢复）
     └── widget/       # 桌面小组件数据桥接
 ```
+
+根部的 `_AppEffects`（`lib/main.dart`）集中触发副作用：任一课表/节次/提醒设置变化 → 防抖刷新桌面小组件并重排课前提醒；回到前台与跨午夜时补跑。
 
 ## 开发环境
 
 ### 前置要求
 
-- Flutter SDK >= 3.3.0
-- Dart SDK >= 3.3.0
+- Flutter SDK >= 3.3.0（Dart >= 3.3.0）
 - Android Studio（包含 Android SDK 与 JDK）
+- Node.js（仅部分适配器测试需要：用 Node 执行提取脚本做单测）
 
 ### 快速开始
 
@@ -120,6 +122,10 @@ flutter create . --platforms=android --org com.aetikyue
 flutter run
 ```
 
+> 注意：`android/` 重新生成后需按 `WIDGET_SETUP.md` 恢复桌面小组件模板，
+> 并确认 app 级 Gradle 启用 core library desugaring（`flutter_local_notifications`
+> 依赖），CI 中这些步骤由 `.github/workflows/release.yml` 自动完成。
+
 ### 代码生成
 
 项目使用 drift 和 go_router，修改数据库表或路由后需要重新生成代码：
@@ -128,10 +134,11 @@ flutter run
 dart run build_runner build --delete-conflicting-outputs
 ```
 
-### 启动图标
+### 启动图标与启动页
 
 ```bash
 dart run flutter_launcher_icons
+dart run flutter_native_splash:create
 ```
 
 ### 运行测试
@@ -162,6 +169,12 @@ APK 输出至 `build/app/outputs/flutter-apk/app-release.apk`。
 flutter build appbundle --release
 ```
 
+### CI 自动构建
+
+推送 `v*` tag（如 `v1.2.1`）会触发 [Release Build](.github/workflows/release.yml)，
+在干净环境重建 `android/`、注入小组件模板与 Gradle 配置后构建 APK/AAB 并上传到
+Actions Artifacts。
+
 ## 适配新学校
 
 在 `lib/features/import/data/` 下新建适配器：
@@ -180,9 +193,17 @@ class MySchoolAdapter extends SchoolAdapter {
 
 ### 适配器开发要点
 
-- `extractJs` 返回的 JSON 格式需符合 `ExtractedCourse.fromJson` 的要求
-- 课程卡片文本格式：`[课程编号]\n[周次周] [节次节] 教室\n本科 - 课程名`
-- 支持 `findDay` 函数通过 data 属性或位置匹配确定星期
+- `extractJs` 返回的 JSON 需符合 `ExtractedCourse.fromJson` 的要求：
+  `name` / `dayOfWeek`(1-7) / `startSection` / `endSection` / `weeks`（1-based），
+  `teacher` / `location` 可选
+- 保证 `startSection <= endSection`：节次文本解析后请排序去重，
+  否则 release 构建（assert 关闭）下会导致课表布局崩溃
+- 需要跳转/等待时返回 `{"__nav": true}`（已跳转）或 `{"__pending": true}`
+  （课表加载中），App 侧会延迟自动重试（上限 3 次）
+- 提取脚本按 IIFE 编写，可参考 `ncu_adapter.dart`（接口直调 + DOM 兜底 +
+  导航重试的三段式结构）；`generic_adapter.dart` 提供可复用的通用 DOM 抽取器
+- 建议为提取脚本编写 Node 单测（mock `document`/`XMLHttpRequest`），
+  参见 `test/jgsu_adapter_test.dart`
 
 ## 贡献指南
 
