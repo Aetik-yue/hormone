@@ -5,6 +5,33 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hormone/features/import/data/cqu_adapter.dart';
 
 void main() {
+  test('区分账号登录入口与课表页，并兼容旧课表路径', () {
+    final adapter = CquAdapter();
+
+    expect(adapter.loginUrl, 'https://my.cqu.edu.cn');
+    expect(
+      adapter.scheduleUrl,
+      'https://my.cqu.edu.cn/tt/university-timetable',
+    );
+    expect(
+      adapter.isSchedulePage(
+        'https://my.cqu.edu.cn/tt/university-timetable',
+      ),
+      isTrue,
+    );
+    expect(
+      adapter.isSchedulePage(
+        'https://my.cqu.edu.cn/workspace/curriculum',
+      ),
+      isTrue,
+    );
+    expect(
+      adapter.isSchedulePage('https://my.cqu.edu.cn/workspace/home'),
+      isFalse,
+    );
+    expect(adapter.isSchedulePage(adapter.loginUrl), isFalse);
+  });
+
   group('CquAdapter extractJs', () {
     test('保留最内层课程元素，避免周五课程偏移到周六', () async {
       final courses = await _runExtractor(r'''

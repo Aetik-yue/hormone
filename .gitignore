@@ -62,3 +62,6 @@ key.properties
 # Tool/internal files
 .workbuddy/
 .metadata
+
+# Locally downloaded CI release artifacts
+release-artifacts/

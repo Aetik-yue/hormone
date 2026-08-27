@@ -2,8 +2,8 @@ import 'school_adapter.dart';
 
 /// 重庆大学（金智教务 XCampus）适配器。
 ///
-/// 教务系统：my.cqu.edu.cn
-/// 课表页 URL：/workspace/curriculum
+/// 登录入口：my.cqu.edu.cn
+/// 课表页 URL：/tt/university-timetable
 /// 页面为 div 网格布局，每个课程卡片文本格式：
 ///   [课程编号]\n[周次周] [节次节] 教室\n本科 - 课程名
 /// 星期信息来自网格列位置或父级 data 属性。
@@ -12,14 +12,15 @@ class CquAdapter extends SchoolAdapter {
   String get schoolName => '重庆大学';
 
   @override
-  String get loginUrl => 'https://my.cqu.edu.cn/workspace/home';
+  String get loginUrl => 'https://my.cqu.edu.cn';
 
   @override
-  String get scheduleUrl => 'https://my.cqu.edu.cn/workspace/curriculum';
+  String get scheduleUrl => 'https://my.cqu.edu.cn/tt/university-timetable';
 
   @override
   bool isSchedulePage(String currentUrl) {
-    return currentUrl.contains('/workspace/curriculum');
+    return currentUrl.contains('/tt/university-timetable') ||
+        currentUrl.contains('/workspace/curriculum');
   }
 
   @override
