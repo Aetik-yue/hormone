@@ -63,6 +63,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 52,
         title: InkWell(
           onTap: () => _showSemesterPicker(context, ref),
           borderRadius: BorderRadius.circular(8),
@@ -91,24 +92,46 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
         centerTitle: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.help_outline_rounded),
-            tooltip: '课程抓取说明',
-            onPressed: () => context.push('/import/guide'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.today_outlined),
-            tooltip: '今日课程',
-            onPressed: () => _showTodaySheet(context, ref),
-          ),
-          IconButton(
             icon: const Icon(Icons.search),
             tooltip: '搜索课程',
             onPressed: () => _openCourseSearch(context, ref),
           ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: '设置',
-            onPressed: () => context.push('/settings'),
+          PopupMenuButton<_ScheduleMenuAction>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: '更多',
+            onSelected: (action) {
+              switch (action) {
+                case _ScheduleMenuAction.today:
+                  _showTodaySheet(context, ref);
+                case _ScheduleMenuAction.importGuide:
+                  context.push('/import/guide');
+                case _ScheduleMenuAction.settings:
+                  context.push('/settings');
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: _ScheduleMenuAction.today,
+                child: _ScheduleMenuItem(
+                  icon: Icons.today_outlined,
+                  label: '今日课程',
+                ),
+              ),
+              PopupMenuItem(
+                value: _ScheduleMenuAction.importGuide,
+                child: _ScheduleMenuItem(
+                  icon: Icons.help_outline_rounded,
+                  label: '课程抓取说明',
+                ),
+              ),
+              PopupMenuItem(
+                value: _ScheduleMenuAction.settings,
+                child: _ScheduleMenuItem(
+                  icon: Icons.settings_outlined,
+                  label: '设置',
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -560,13 +583,15 @@ class _WeekSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      key: const Key('schedule-week-selector'),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
           IconButton(
             icon: Icon(Icons.chevron_left,
                 size: 20, color: theme.colorScheme.primary),
             visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
             onPressed: selectedWeek > 1 ? onPrev : null,
           ),
           Expanded(
@@ -645,6 +670,7 @@ class _WeekSelector extends StatelessWidget {
             icon: Icon(Icons.chevron_right,
                 size: 20, color: theme.colorScheme.primary),
             visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
             onPressed: selectedWeek < totalWeeks ? onNext : null,
           ),
         ],
@@ -722,6 +748,26 @@ class _WeekSelector extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+enum _ScheduleMenuAction { today, importGuide, settings }
+
+class _ScheduleMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _ScheduleMenuItem({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 20),
+        const SizedBox(width: 12),
+        Text(label),
+      ],
     );
   }
 }

@@ -15,7 +15,7 @@ const double _sectionHeight = 56.0;
 const double _cardInset = 4.0;
 
 /// 左侧时间轴宽度。
-const double _timeAxisWidth = 48.0;
+const double _timeAxisWidth = 40.0;
 
 /// 周视图课程表：左侧节次时间轴 + 右侧 7 天列，课程卡片按节次定位。
 /// 点击课程卡片弹出详情，长按进入编辑。
@@ -247,6 +247,7 @@ class _TimeAxis extends StatelessWidget {
     final theme = Theme.of(context);
     final count = sectionTimes.length;
     return SizedBox(
+      key: const Key('week-view-time-axis'),
       width: _timeAxisWidth,
       height: totalHeight,
       child: Stack(

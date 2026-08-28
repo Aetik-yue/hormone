@@ -47,9 +47,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final scrollView = find.byKey(const Key('week-view-vertical-scroll'));
+    final timeAxis = find.byKey(const Key('week-view-time-axis'));
     final section16 = find.byKey(const ValueKey('section-axis-16'));
     final mondayHeader = find.text('周一');
     expect(scrollView, findsOneWidget);
+    expect(tester.getSize(timeAxis).width, 40);
     expect(section16, findsOneWidget);
 
     final headerY = tester.getTopLeft(mondayHeader).dy;
