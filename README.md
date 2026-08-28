@@ -37,7 +37,8 @@
 ### 数据导入
 - **教务系统 WebView 导入**：内置浏览器登录教务系统，自动抓取课表
   - 专用适配：重庆大学（金智 XCampus）、江西财经大学（青果）、沈阳化工大学（正方）、南昌大学（强智）、井冈山大学（金智智慧校园）
-  - 系统兼容：39 所重点高校按公开可确认的教务产品类型复用对应规则（导入页可按学校名 / 系统名 / URL 搜索）
+  - 高校目录：共 43 所学校，按校名拼音排列；支持按学校名、拼音、系统名或 URL 搜索
+  - 系统兼容：没有专用适配器的学校按公开可确认的教务产品类型复用对应规则
   - 通用入口：任意教务系统 URL，通用 DOM 抓取器兜底
 - **文件导入**：支持 ICS 日历文件和 JSON 模板批量导入
 - **导入模式**：整体替换 / 合并追加两种模式，合并时与现有课表冲突的课程标红提示
@@ -189,7 +190,8 @@ class MySchoolAdapter extends SchoolAdapter {
 }
 ```
 
-然后在 `school_adapter.dart` 的 `otherSchoolAdapters` 列表（或 `eliteUniversityAdapters`）中注册即可。
+然后在 `school_adapter.dart` 的 `schoolAdapters` 注册列表和
+`_schoolPinyinKeys` 拼音键映射中添加学校即可。
 
 ### 适配器开发要点
 
