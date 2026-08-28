@@ -3,10 +3,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hormone/features/import/data/configured_school_adapter.dart';
+import 'package:hormone/features/import/data/jufe_adapter.dart';
+import 'package:hormone/features/import/data/ncu_adapter.dart';
 import 'package:hormone/features/import/data/school_adapter.dart';
 
 void main() {
-  const expectedKeyUniversityNames = {
+  const expectedSchoolNames = {
     '北京大学',
     '清华大学',
     '中国人民大学',
@@ -46,14 +48,53 @@ void main() {
     '西北工业大学',
     '西北农林科技大学',
     '兰州大学',
+    '井冈山大学',
+    '江西财经大学',
+    '南昌大学',
+    '沈阳化工大学',
   };
 
-  test('重点高校目录完整且没有重复学校', () {
-    final names = eliteUniversityAdapters.map((e) => e.schoolName).toSet();
+  test('高校目录完整且没有重复学校', () {
+    final names = schoolAdapters.map((e) => e.schoolName).toSet();
 
-    expect(eliteUniversityAdapters, hasLength(39));
-    expect(names, expectedKeyUniversityNames);
-    expect(names, hasLength(eliteUniversityAdapters.length));
+    expect(schoolAdapters, hasLength(43));
+    expect(names, expectedSchoolNames);
+    expect(names, hasLength(schoolAdapters.length));
+  });
+
+  test('高校目录按校名拼音字母顺序排列', () {
+    final actualKeys = schoolAdapters
+        .map((adapter) => schoolAlphabeticalKey(adapter.schoolName))
+        .toList();
+    final sortedKeys = [...actualKeys]..sort();
+
+    expect(actualKeys, orderedEquals(sortedKeys));
+    expect(
+      schoolAdapters.map((adapter) => adapter.schoolName).take(7),
+      [
+        '北京大学',
+        '北京航空航天大学',
+        '北京理工大学',
+        '北京师范大学',
+        '重庆大学',
+        '大连理工大学',
+        '电子科技大学',
+      ],
+    );
+  });
+
+  test('南昌大学与江西财经大学均注册为专用适配器', () {
+    final ncu = schoolAdapters.singleWhere(
+      (adapter) => adapter.schoolName == '南昌大学',
+    );
+    final jufe = schoolAdapters.singleWhere(
+      (adapter) => adapter.schoolName == '江西财经大学',
+    );
+
+    expect(ncu, isA<NcuAdapter>());
+    expect(jufe, isA<JufeAdapter>());
+    expect(ncu.supportLevel, AdapterSupportLevel.schoolVerified);
+    expect(jufe.supportLevel, AdapterSupportLevel.schoolVerified);
   });
 
   test('所有学校入口均为有效 HTTP(S) URL 且抽取脚本非空', () {
@@ -67,7 +108,7 @@ void main() {
   });
 
   test('新版正方学校使用登录态接口并保留 DOM 回退', () {
-    final adapter = eliteUniversityAdapters.singleWhere(
+    final adapter = schoolAdapters.singleWhere(
       (item) => item.schoolName == '浙江大学',
     );
 
@@ -79,7 +120,7 @@ void main() {
   });
 
   test('新版正方接口解析课程、单双周和节次', () async {
-    final adapter = eliteUniversityAdapters.singleWhere(
+    final adapter = schoolAdapters.singleWhere(
       (item) => item.schoolName == '浙江大学',
     );
     final script = '''
@@ -135,7 +176,7 @@ void main() {
   });
 
   test('未知产品学校明确标记为通用抓取', () {
-    final adapter = eliteUniversityAdapters.singleWhere(
+    final adapter = schoolAdapters.singleWhere(
       (item) => item.schoolName == '国防科技大学',
     );
 

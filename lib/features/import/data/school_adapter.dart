@@ -111,11 +111,11 @@ class ExtractedCourse {
   }
 }
 
-/// 重点高校目录（覆盖用户最常用的 39 所「985 工程」高校）。
+/// 按学校入口和教务产品类型配置的高校适配器。
 ///
-/// 重庆大学使用专用适配器，其余学校按公开可确认的教务系统产品类型
-/// 复用系统兼容规则；无法确认产品类型的学校使用通用抓取器。
-final List<SchoolAdapter> eliteUniversityAdapters = List.unmodifiable([
+/// 具备单独页面解析逻辑的学校在文件末尾注册专用适配器；其余学校复用
+/// 对应教务产品的兼容规则，无法确认产品类型的学校使用通用抓取器。
+final List<SchoolAdapter> _configuredUniversityAdapters = List.unmodifiable([
   CquAdapter(),
   const ConfiguredSchoolAdapter(
     schoolName: '北京大学',
@@ -309,19 +309,73 @@ final List<SchoolAdapter> eliteUniversityAdapters = List.unmodifiable([
   ),
 ]);
 
-/// 已有的其他学校专用适配器。
-final List<SchoolAdapter> otherSchoolAdapters = List.unmodifiable([
-  JgsuAdapter(),
-  JufeAdapter(),
-  NcuAdapter(),
-  SyuctAdapter(),
-]);
+/// 已注册的学校适配器列表，按校名拼音字母顺序排列且不可变。
+final List<SchoolAdapter> schoolAdapters = List.unmodifiable(
+  <SchoolAdapter>[
+    ..._configuredUniversityAdapters,
+    JgsuAdapter(),
+    JufeAdapter(),
+    NcuAdapter(),
+    SyuctAdapter(),
+  ]..sort((a, b) {
+      final byPinyin = schoolAlphabeticalKey(a.schoolName)
+          .compareTo(schoolAlphabeticalKey(b.schoolName));
+      return byPinyin != 0 ? byPinyin : a.schoolName.compareTo(b.schoolName);
+    }),
+);
 
-/// 已注册的学校适配器列表（不可变）。
-final List<SchoolAdapter> schoolAdapters = List.unmodifiable([
-  ...eliteUniversityAdapters,
-  ...otherSchoolAdapters,
-]);
+/// 学校名称的无声调拼音键，用于稳定的字母排序和拼音搜索。
+///
+/// Dart 默认按 Unicode 码点排列中文，结果不等同于拼音顺序；内置学校
+/// 使用显式键，未来新增学校若尚未补键则回退到原名称。
+String schoolAlphabeticalKey(String schoolName) =>
+    _schoolPinyinKeys[schoolName] ?? schoolName.toLowerCase();
+
+const Map<String, String> _schoolPinyinKeys = {
+  '北京大学': 'beijingdaxue',
+  '北京航空航天大学': 'beijinghangkonghangtiandaxue',
+  '北京理工大学': 'beijingligongdaxue',
+  '北京师范大学': 'beijingshifandaxue',
+  '重庆大学': 'chongqingdaxue',
+  '大连理工大学': 'dalianligongdaxue',
+  '电子科技大学': 'dianzikejidaxue',
+  '东北大学': 'dongbeidaxue',
+  '东南大学': 'dongnandaxue',
+  '复旦大学': 'fudandaxue',
+  '国防科技大学': 'guofangkejidaxue',
+  '哈尔滨工业大学': 'haerbingongyedaxue',
+  '湖南大学': 'hunandaxue',
+  '华东师范大学': 'huadongshifandaxue',
+  '华南理工大学': 'huananligongdaxue',
+  '华中科技大学': 'huazhongkejidaxue',
+  '吉林大学': 'jilindaxue',
+  '江西财经大学': 'jiangxicaijingdaxue',
+  '井冈山大学': 'jinggangshandaxue',
+  '兰州大学': 'lanzhoudaxue',
+  '南昌大学': 'nanchangdaxue',
+  '南京大学': 'nanjingdaxue',
+  '南开大学': 'nankaidaxue',
+  '清华大学': 'qinghuadaxue',
+  '厦门大学': 'xiamendaxue',
+  '山东大学': 'shandongdaxue',
+  '上海交通大学': 'shanghaijiaotongdaxue',
+  '沈阳化工大学': 'shenyanghuagongdaxue',
+  '四川大学': 'sichuandaxue',
+  '天津大学': 'tianjindaxue',
+  '同济大学': 'tongjidaxue',
+  '武汉大学': 'wuhandaxue',
+  '西安交通大学': 'xianjiaotongdaxue',
+  '西北工业大学': 'xibeigongyedaxue',
+  '西北农林科技大学': 'xibeinonglinkejidaxue',
+  '浙江大学': 'zhejiangdaxue',
+  '中国海洋大学': 'zhongguohaiyangdaxue',
+  '中国科学技术大学': 'zhongguokexuejishudaxue',
+  '中国农业大学': 'zhongguonongyedaxue',
+  '中国人民大学': 'zhongguorenmindaxue',
+  '中南大学': 'zhongnandaxue',
+  '中山大学': 'zhongshandaxue',
+  '中央民族大学': 'zhongyangminzudaxue',
+};
 
 /// 创建通用适配器（用户自定义 URL）。
 SchoolAdapter createGenericAdapter(String url) =>

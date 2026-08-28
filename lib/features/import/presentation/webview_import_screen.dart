@@ -118,10 +118,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   Widget _buildSchoolSelector() {
     final theme = Theme.of(context);
     final query = _schoolQuery.trim().toLowerCase();
-    final eliteMatches = eliteUniversityAdapters
-        .where((adapter) => _matchesSchool(adapter, query))
-        .toList(growable: false);
-    final otherMatches = otherSchoolAdapters
+    final matches = schoolAdapters
         .where((adapter) => _matchesSchool(adapter, query))
         .toList(growable: false);
     return ListView(
@@ -184,38 +181,22 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        if (eliteMatches.isNotEmpty) ...[
+        if (matches.isNotEmpty) ...[
           Text(
-            '重点高校（${eliteMatches.length}/${eliteUniversityAdapters.length}）',
+            '高校（${matches.length}/${schoolAdapters.length}）',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
-          ...eliteMatches.map(
+          ...matches.map(
             (adapter) => _SchoolCard(
               adapter: adapter,
               onTap: () => _startLogin(adapter),
             ),
           ),
         ],
-        if (otherMatches.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Text(
-            '其他专用适配',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          ...otherMatches.map(
-            (adapter) => _SchoolCard(
-              adapter: adapter,
-              onTap: () => _startLogin(adapter),
-            ),
-          ),
-        ],
-        if (eliteMatches.isEmpty && otherMatches.isEmpty)
+        if (matches.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Text(
@@ -262,6 +243,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   bool _matchesSchool(SchoolAdapter adapter, String query) {
     if (query.isEmpty) return true;
     return adapter.schoolName.toLowerCase().contains(query) ||
+        schoolAlphabeticalKey(adapter.schoolName).contains(query) ||
         adapter.systemName.toLowerCase().contains(query) ||
         adapter.loginUrl.toLowerCase().contains(query);
   }
@@ -308,8 +290,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
               Icon(Icons.search_off,
                   size: 56, color: Theme.of(context).colorScheme.outline),
               const SizedBox(height: 16),
-              Text('未抓取到课程数据',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text('未抓取到课程数据', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
                 '请确认已登录并进入课表页面，然后点击右上角「抓取课表」',
@@ -332,8 +313,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     final notifier = ref.read(webviewImportProvider.notifier);
     // 合并模式需要与现有课表比对冲突；替换模式会清空现有课表，无意义。
     final existingCourses = state.mode == ImportMode.merge
-        ? ref.watch(scheduleCoursesProvider).valueOrNull ??
-            const <Course>[]
+        ? ref.watch(scheduleCoursesProvider).valueOrNull ?? const <Course>[]
         : const <Course>[];
     final conflictedNames = _conflictNames(state, existingCourses);
     return Column(
@@ -357,10 +337,9 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
                       : Icons.select_all,
                   size: 18,
                 ),
-                label: Text(
-                    state.selectedCount == state.courses.length
-                        ? '取消全选'
-                        : '全选'),
+                label: Text(state.selectedCount == state.courses.length
+                    ? '取消全选'
+                    : '全选'),
               ),
             ],
           ),

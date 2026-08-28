@@ -1,24 +1,21 @@
+import 'generic_adapter.dart';
 import 'school_adapter.dart';
 
-/// 南昌大学（强智教务管理系统 QZSoft）适配器。
+/// 南昌大学本科教学综合管理服务平台专用适配器。
 ///
-/// 教务系统：jwpt.ncu.edu.cn（湖南强智科技，路径 /jsxsd/）
-/// 登录页：/jsxsd/（账号 + 密码 + 验证码，验证码在 WebView 中手动输入）
-/// 登录成功 → 学生主页（框架集或单页布局，菜单位于左侧）
-/// 课表页：/jsxsd/kbcx/xskbcx_cxXsgg.html（「学生个人课表」菜单）
-/// 课表数据接口：/jsxsd/kbcx/xskbcx_cxXsKb.html?gnmkdm=N2151
-///   POST xnm（学年）/ xqm（学期²×3，春=3、秋=12）→ 返回 kbList JSON
+/// 当前入口：jwpt.ncu.edu.cn/jsxsd/sso.jsp（南昌大学门户统一认证）
+/// 教务系统：jwpt.ncu.edu.cn/jsxsd/（强智 QZSoft）
 ///
 /// 提取流程（一次注入）：
-/// 1. 同步 XHR 直调课表数据接口解析 JSON（登录态下任意页面可用，最可靠）
-/// 2. 兜底：解析课表页 DOM（兼容强智/老正方「周X第Y,Z节{第A-B周}」文本格式）
-/// 3. 均失败时：点击菜单中的课表链接，返回 {"__nav": true} 由 Dart 侧重试
+/// 1. 在旧系统域名下读取登录态课表接口，兼容过渡期账号
+/// 2. 解析新旧课表页 DOM，并使用通用逻辑处理 data 属性/rowspan 表格
+/// 3. 均失败时点击课表菜单，返回 {"__nav": true} 由 Dart 侧重试
 class NcuAdapter extends SchoolAdapter {
   @override
   String get schoolName => '南昌大学';
 
   @override
-  String get loginUrl => 'https://jwpt.ncu.edu.cn/jsxsd/';
+  String get loginUrl => 'https://jwpt.ncu.edu.cn/jsxsd/sso.jsp';
 
   @override
   String get scheduleUrl =>
@@ -26,11 +23,16 @@ class NcuAdapter extends SchoolAdapter {
 
   @override
   bool isSchedulePage(String currentUrl) {
-    return currentUrl.contains('xskbcx');
+    final url = currentUrl.toLowerCase();
+    return url.contains('xskbcx') ||
+        url.contains('wdkb') ||
+        url.contains('schedule') ||
+        url.contains('student-timetable');
   }
 
   @override
-  String get extractJs => r'''
+  String get extractJs =>
+      r'''
 (function() {
   var results = [];
   var seen = {};
@@ -40,7 +42,7 @@ class NcuAdapter extends SchoolAdapter {
   function parseSections(str) {
     var out = [];
     if (!str) return out;
-    var parts = str.split(/[,，、]+/);
+    var parts = String(str).replace(/第|节/g, '').split(/[,，、]+/);
     for (var i = 0; i < parts.length; i++) {
       var p = parts[i].trim();
       var rm = p.match(/^(\d+)\s*[-–~]\s*(\d+)$/);
@@ -51,6 +53,10 @@ class NcuAdapter extends SchoolAdapter {
         if (!isNaN(n)) out.push(n);
       }
     }
+    out = out.filter(function(value, index, all) {
+      return value >= 1 && value <= 20 && all.indexOf(value) === index;
+    });
+    out.sort(function(a, b) { return a - b; });
     return out;
   }
 
@@ -131,48 +137,61 @@ class NcuAdapter extends SchoolAdapter {
                  document.querySelector('select[name="xqm"]');
     if (selXnm && selXnm.value) xnm = selXnm.value;
     if (selXqm && selXqm.value) xqm = selXqm.value;
+    var termCandidates = [];
     if (!xnm || !xqm) {
-      // 兜底：按当前日期推算学年学期（xqm = 学期²×3：春=3、秋=12）
+      // 兜底：9月起属于当年秋季学期，1—8月属于上一学年。
+      // 强智部署的学期编码存在 3/12 和 1/2 两类，依次尝试。
       var now = new Date();
       var m = now.getMonth() + 1;
       var y = now.getFullYear();
-      xnm = String(y - 1);
-      xqm = (m >= 2 && m <= 8) ? '3' : '12';
+      xnm = String(m >= 9 ? y : y - 1);
+      termCandidates = (m >= 2 && m <= 8)
+          ? ['3', '12', '2', '1']
+          : ['12', '3', '1', '2'];
+    } else {
+      termCandidates = [xqm];
     }
     var urls = [
       '/jsxsd/kbcx/xskbcx_cxXsKb.html?gnmkdm=N2151',
       '/jsxsd/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151'
     ];
     for (var u = 0; u < urls.length; u++) {
-      try {
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', urls[u], false);
-        xhr.setRequestHeader('Content-Type',
-            'application/x-www-form-urlencoded; charset=UTF-8');
-        xhr.send('xnm=' + encodeURIComponent(xnm) + '&xqm=' +
-                 encodeURIComponent(xqm));
-        if (xhr.status !== 200) continue;
-        var data = JSON.parse(xhr.responseText);
-        var list = data.kbList || data.items || data.rows || [];
-        if (!list || list.length === 0) continue;
-        for (var i = 0; i < list.length; i++) {
-          var it = list[i];
-          var day = parseInt(it.xqj);
-          if (isNaN(day) && it.xqjmc) {
-            var dm = String(it.xqjmc).match(/周([一二三四五六日天])|星期([一二三四五六日天])/);
-            if (dm) day = dayMap[dm[1] || dm[2]];
+      for (var tc = 0; tc < termCandidates.length; tc++) {
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', urls[u], false);
+          xhr.setRequestHeader('Content-Type',
+              'application/x-www-form-urlencoded; charset=UTF-8');
+          xhr.send('xnm=' + encodeURIComponent(xnm) + '&xqm=' +
+                   encodeURIComponent(termCandidates[tc]));
+          if (xhr.status !== 200) continue;
+          var data = JSON.parse(xhr.responseText);
+          var list = data.kbList || data.items || data.rows ||
+              (data.datas && (data.datas.kbList || data.datas.items ||
+               data.datas.rows)) || (Array.isArray(data) ? data : []);
+          if (!list || list.length === 0) continue;
+          for (var i = 0; i < list.length; i++) {
+            var it = list[i];
+            var day = parseInt(it.xqj || it.dayOfWeek || it.weekDay);
+            if (isNaN(day) && (it.xqjmc || it.weekDayName)) {
+              var dm = String(it.xqjmc || it.weekDayName)
+                  .match(/周([一二三四五六日天])|星期([一二三四五六日天])/);
+              if (dm) day = dayMap[dm[1] || dm[2]];
+            }
+            var secs = parseSections(String(
+                it.jcs || it.jc || it.sections || ''));
+            var weeks = parseWeeksText(String(
+                it.zcd || it.zc || it.weeks || it.weekDescription || ''));
+            addResult(
+              String(it.kcmc || it.courseName || it.name || ''),
+              it.xm || it.jsxm || it.teacherName || it.teacher || null,
+              it.cdmc || it.jxcd || it.classroomName || it.location || null,
+              day, secs, weeks
+            );
           }
-          var secs = parseSections(String(it.jc || ''));
-          var weeks = parseWeeksText(String(it.zcd || ''));
-          addResult(
-            String(it.kcmc || ''),
-            it.xm || it.jsxm || null,
-            it.cdmc || it.jxcd || null,
-            day, secs, weeks
-          );
-        }
-        if (results.length > 0) return true;
-      } catch (e) {}
+          if (results.length > 0) return true;
+        } catch (e) {}
+      }
     }
     return false;
   }
@@ -242,8 +261,11 @@ class NcuAdapter extends SchoolAdapter {
     } catch (e) {}
   }
 
-  // 1. 接口直连（登录态下任意页面可用）
-  if (tryApi()) return JSON.stringify(results);
+  // 1. 旧强智系统接口直连；新平台不发送无意义的旧接口请求。
+  var legacyLocation = !window.location ||
+      /jwpt\.ncu\.edu\.cn|\/jsxsd\//i.test(
+          (window.location.hostname || '') + (window.location.pathname || ''));
+  if (legacyLocation && tryApi()) return JSON.stringify(results);
 
   // 2. DOM 解析
   for (var i = 0; i < docs.length; i++) {
@@ -251,7 +273,19 @@ class NcuAdapter extends SchoolAdapter {
     if (results.length > 0) return JSON.stringify(results);
   }
 
-  // 3. 课表容器存在但暂无课程（加载中 / 本学期无课）→ 等待重试
+  // 3. 新平台及其他表格形态使用通用 data 属性/rowspan 解析器兜底。
+  var genericResult = '[]';
+  try {
+    genericResult = ''' +
+      GenericAdapter.commonExtractJs +
+      r''';
+    var genericCourses = JSON.parse(genericResult);
+    if (Array.isArray(genericCourses) && genericCourses.length > 0) {
+      return genericResult;
+    }
+  } catch (e) {}
+
+  // 4. 课表容器存在但暂无课程（加载中 / 本学期无课）→ 等待重试
   for (var i = 0; i < docs.length; i++) {
     if (docs[i].querySelector) {
       var kb = docs[i].querySelector('#kbTable, .kb-table, #table1, table.kbTable, .el-table__body');
@@ -259,14 +293,19 @@ class NcuAdapter extends SchoolAdapter {
     }
   }
 
-  // 4. 找到课表菜单链接 → 模拟点击
+  // 5. 找到课表菜单链接 → 模拟点击
   for (var i = 0; i < docs.length; i++) {
     var links = docs[i].querySelectorAll
-        ? docs[i].querySelectorAll('a[href*="xskbcx"], a[href*="kbcx"]')
+        ? docs[i].querySelectorAll(
+            'a, [role="menuitem"], .menu-item, .el-menu-item')
         : [];
     for (var j = 0; j < links.length; j++) {
-      var t = (links[j].textContent || '').trim();
-      if (t.indexOf('课表') >= 0 || /xskbcx/i.test(links[j].href)) {
+      var t = ((links[j].textContent || '') + ' ' +
+          ((links[j].getAttribute && links[j].getAttribute('title')) || '')).trim();
+      var href = (links[j].getAttribute && links[j].getAttribute('href')) ||
+          links[j].href || '';
+      if (/个人课表|我的课表|学生课表|课程表/.test(t) ||
+          /xskbcx|kbcx|wdkb|schedule|timetable/i.test(href)) {
         try { links[j].click(); } catch (e) {}
         return JSON.stringify({ __nav: true });
       }

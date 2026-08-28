@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:hormone/core/theme/app_theme.dart';
 import 'package:hormone/features/import/application/course_capture_orientation.dart';
-import 'package:hormone/features/import/data/cqu_adapter.dart';
+import 'package:hormone/features/import/data/school_adapter.dart';
 import 'package:hormone/features/import/presentation/webview_import_screen.dart';
 
 void main() {
@@ -34,7 +34,8 @@ void main() {
     );
 
     final expectedColor = AppTheme.light.colorScheme.onSurfaceVariant;
-    final urlText = tester.widget<Text>(find.text(CquAdapter().loginUrl));
+    final urlText =
+        tester.widget<Text>(find.text(schoolAdapters.first.loginUrl));
     final customDescription = tester.widget<Text>(
       find.text('适用于未列出的学校。输入教务系统网址，登录后点击「抓取课表」。'),
     );
@@ -46,8 +47,9 @@ void main() {
       find.text('登录和浏览保持竖屏；点击抓取时会短暂切换横屏，保证七天课表列位置稳定。'),
       findsOneWidget,
     );
-    expect(find.text('重点高校（39/39）'), findsOneWidget);
-    expect(find.text('专用适配'), findsOneWidget);
+    expect(find.text('高校（43/43）'), findsOneWidget);
+    expect(find.textContaining('重点高校'), findsNothing);
+    expect(find.text('其他专用适配'), findsNothing);
     expect(orientationCalls, isEmpty);
     expect(tester.takeException(), isNull);
   });
@@ -68,7 +70,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('重点高校（1/39）'), findsOneWidget);
+    expect(find.text('高校（1/43）'), findsOneWidget);
     expect(find.text('浙江大学'), findsNWidgets(2));
     expect(find.text('重庆大学'), findsNothing);
     expect(tester.takeException(), isNull);
