@@ -402,7 +402,7 @@ class _DayColumn extends StatelessWidget {
 
 /// 课程卡片：用课程色时间轨建立识别，低饱和卡面承载文字。
 ///
-/// 窄列优先把高度留给课程名；卡片足够高时再依次展示教室、教师。
+/// 教室固定在卡片底部并保留多行空间；教师仅在高卡片中补充展示。
 class CourseCard extends StatelessWidget {
   final Course course;
   final VoidCallback onTap;
@@ -449,16 +449,23 @@ class CourseCard extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final compactWidth = constraints.maxWidth < 56;
-              final showLocation = constraints.maxHeight >= 64 &&
-                  course.location != null &&
-                  course.location!.trim().isNotEmpty;
-              final showTeacher = constraints.maxHeight >= 92 &&
-                  course.teacher != null &&
-                  course.teacher!.trim().isNotEmpty;
+              final compactHeight = constraints.maxHeight < 64;
+              final hasLocation = course.location?.trim().isNotEmpty ?? false;
+              final hasTeacher = course.teacher?.trim().isNotEmpty ?? false;
+              final showLocation = constraints.maxHeight >= 40 && hasLocation;
+              final showTeacher = hasTeacher &&
+                  (constraints.maxHeight >= 132 ||
+                      (!showLocation && constraints.maxHeight >= 72));
               final fontSize = compactWidth ? 10.5 : 11.5;
-              final detailHeight =
-                  (showLocation ? 14.0 : 0) + (showTeacher ? 13.0 : 0);
-              final verticalPadding = constraints.maxHeight < 56 ? 3.0 : 5.0;
+              final locationLines = compactHeight ? 2 : 3;
+              final locationFontSize = compactWidth ? 8.5 : 9.0;
+              final locationHeight = showLocation
+                  ? locationLines * locationFontSize * 1.05 + 2
+                  : 0.0;
+              final teacherHeight =
+                  showTeacher ? (compactWidth ? 8.5 : 9.0) * 1.15 + 2 : 0.0;
+              final detailHeight = locationHeight + teacherHeight;
+              final verticalPadding = constraints.maxHeight < 56 ? 2.5 : 5.0;
               final titleHeight =
                   constraints.maxHeight - verticalPadding * 2 - detailHeight;
               final titleLines =
@@ -503,19 +510,22 @@ class CourseCard extends StatelessWidget {
                               ),
                             ),
                           ),
+                          if (showTeacher)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: _CourseCardMeta(
+                                key: const Key('course-card-teacher'),
+                                value: course.teacher!.trim(),
+                                color: foreground,
+                                fontSize: compactWidth ? 8.5 : 9,
+                              ),
+                            ),
                           if (showLocation)
-                            _CourseCardMeta(
-                              key: const Key('course-card-location'),
+                            _CourseCardLocation(
                               value: course.location!.trim(),
                               color: foreground,
-                              fontSize: compactWidth ? 9 : 9.5,
-                            ),
-                          if (showTeacher)
-                            _CourseCardMeta(
-                              key: const Key('course-card-teacher'),
-                              value: course.teacher!.trim(),
-                              color: foreground,
-                              fontSize: compactWidth ? 8.5 : 9,
+                              fontSize: locationFontSize,
+                              maxLines: locationLines,
                             ),
                         ],
                       ),
@@ -541,6 +551,53 @@ class CourseCard extends StatelessWidget {
         course.teacher!.trim(),
     ];
     return details.join('，');
+  }
+}
+
+/// 固定在课程卡片底部的教室区；细分隔线让扫视时能快速定位关键信息。
+class _CourseCardLocation extends StatelessWidget {
+  final String value;
+  final Color color;
+  final double fontSize;
+  final int maxLines;
+
+  const _CourseCardLocation({
+    required this.value,
+    required this.color,
+    required this.fontSize,
+    required this.maxLines,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: maxLines * fontSize * 1.05 + 2,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: color.withAlpha(55), width: 0.6),
+          ),
+        ),
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Text(
+            value,
+            key: const Key('course-card-location'),
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            softWrap: true,
+            style: TextStyle(
+              fontSize: fontSize,
+              height: 1.05,
+              letterSpacing: -0.2,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

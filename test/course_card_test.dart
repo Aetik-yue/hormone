@@ -10,14 +10,14 @@ void main() {
     semesterId: 'semester',
     name: '云计算与大数据',
     teacher: '张老师',
-    location: 'D101',
+    location: '前湖校区教一101',
     dayOfWeek: 1,
     startSection: 1,
     endSection: 2,
     colorValue: 0xFF5B8DEF,
   );
 
-  testWidgets('窄课程卡片优先给课程名更多行数且不会溢出', (tester) async {
+  testWidgets('两节课卡片把长教室信息固定在底部并保留三行空间', (tester) async {
     final semantics = tester.ensureSemantics();
 
     await tester.pumpWidget(
@@ -46,11 +46,29 @@ void main() {
     expect(name.style?.fontSize, 10.5);
     expect(find.byKey(const Key('course-card-color-rail')), findsOneWidget);
     expect(find.byKey(const Key('course-card-location')), findsOneWidget);
-    expect(find.byKey(const Key('course-card-teacher')), findsOneWidget);
-    expect(find.text('D101'), findsOneWidget);
-    expect(find.text('张老师'), findsOneWidget);
+    expect(find.byKey(const Key('course-card-teacher')), findsNothing);
+
+    final location = tester.widget<Text>(
+      find.byKey(const Key('course-card-location')),
+    );
+    expect(location.data, course.location);
+    expect(location.maxLines, 3);
+    expect(location.style?.fontWeight, FontWeight.w700);
+
+    final locationPainter = TextPainter(
+      text: TextSpan(text: location.data, style: location.style),
+      maxLines: location.maxLines,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: 33);
+    expect(locationPainter.didExceedMaxLines, isFalse);
+
+    final cardRect = tester.getRect(find.byType(CourseCard));
+    final locationRect = tester.getRect(
+      find.byKey(const Key('course-card-location')),
+    );
+    expect(cardRect.bottom - locationRect.bottom, lessThanOrEqualTo(6));
     expect(
-      find.bySemanticsLabel('云计算与大数据，周一，第1到2节，D101，张老师'),
+      find.bySemanticsLabel('云计算与大数据，周一，第1到2节，前湖校区教一101，张老师'),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -58,7 +76,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('单节课卡片隐藏地点和教师以保证课程名可读', (tester) async {
+  testWidgets('单节课卡片仍展示两行教室信息并隐藏教师', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -77,11 +95,42 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const Key('course-card-name')), findsOneWidget);
-    expect(find.byKey(const Key('course-card-location')), findsNothing);
+    final name = tester.widget<Text>(
+      find.byKey(const Key('course-card-name')),
+    );
+    final location = tester.widget<Text>(
+      find.byKey(const Key('course-card-location')),
+    );
+    expect(name.maxLines, 2);
+    expect(location.maxLines, 2);
     expect(find.byKey(const Key('course-card-teacher')), findsNothing);
-    expect(find.text('D101'), findsNothing);
+    expect(find.text('前湖校区教一101'), findsOneWidget);
     expect(find.text('张老师'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('三节课及以上的高卡片在教室上方补充教师', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 42,
+              height: 160,
+              child: CourseCard(
+                course: course,
+                onTap: _noop,
+                onLongPress: _noop,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('course-card-location')), findsOneWidget);
+    expect(find.byKey(const Key('course-card-teacher')), findsOneWidget);
+    expect(find.text('张老师'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
