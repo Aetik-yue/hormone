@@ -172,7 +172,7 @@ flutter build appbundle --release
 
 ### CI 自动构建
 
-推送 `v*` tag（如 `v1.2.1`）会触发 [Release Build](.github/workflows/release.yml)，
+推送 `v*` tag（如 `v1.2.2`）会触发 [Release Build](.github/workflows/release.yml)，
 在干净环境重建 `android/`、注入小组件模板与 Gradle 配置后构建 APK/AAB 并上传到
 Actions Artifacts。
 
