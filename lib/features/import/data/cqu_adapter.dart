@@ -30,6 +30,38 @@ class CquAdapter extends SchoolAdapter {
   var dayMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7};
   var _dayHeaders = null; // 日期表头缓存（闭包变量，每次提取刷新）
 
+  // CQU 课表会把同一时间格内超出展示上限的课程折叠为
+  // 「还有 N 条未展开」。这些课程在展开前尚未挂载到 DOM，直接扫描会漏课。
+  // 先点击全部可见的折叠入口并返回等待信号，让 WebView 等页面重新渲染后
+  // 再执行一次完整提取。
+  var collapsedTriggers = findCollapsedCourseTriggers();
+  if (collapsedTriggers.length > 0) {
+    var clicked = 0;
+    for (var i = 0; i < collapsedTriggers.length; i++) {
+      var trigger = collapsedTriggers[i];
+      try {
+        if (typeof trigger.click === 'function') {
+          trigger.click();
+        } else if (typeof trigger.dispatchEvent === 'function') {
+          trigger.dispatchEvent(new Event('click', {bubbles: true}));
+        } else {
+          continue;
+        }
+        clicked++;
+      } catch (e) {
+        console.log('[CQU] Failed to expand collapsed courses: ' + e);
+      }
+    }
+    if (clicked > 0) {
+      console.log('[CQU] Expanded ' + clicked + ' collapsed course groups');
+      return JSON.stringify({
+        __pending: true,
+        reason: 'expandingCollapsedCourses',
+        expandedGroupCount: clicked
+      });
+    }
+  }
+
   // ═══ 策略1：找所有包含课程编号+周次信息的元素 ═══
   // 课程卡片文本特征：包含 [数字-数字] 和 X周 和 X节
   var allEls = document.body.querySelectorAll('*');
@@ -230,6 +262,43 @@ class CquAdapter extends SchoolAdapter {
     }
     unique.sort(function(a,b){return a-b;});
     return unique;
+  }
+
+  function findCollapsedCourseTriggers() {
+    if (!document.body) return [];
+    var all = document.body.querySelectorAll('*');
+    var matches = [];
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      // 去掉换行与空格，兼容窄列把「未展开」三个字折成两行的情况。
+      var text = (el.innerText || el.textContent || '')
+          .replace(/\s+/g, '');
+      // 尾部可能含下拉箭头的文本表示（如 Material Icons 的名称），
+      // 因此只约束固定前缀，并用长度限制排除大块父容器。
+      if (!/^还有\d+条未展开/.test(text) || text.length > 64) continue;
+
+      if (typeof el.getBoundingClientRect === 'function') {
+        var rect = el.getBoundingClientRect();
+        // 展开后的旧节点有时仍留在 DOM 中但被 display:none 隐藏，不能重复点击。
+        if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+      }
+      matches.push(el);
+    }
+
+    // 文本通常同时命中可点击容器和内部 span；只点击最内层节点，事件会冒泡到
+    // Vue/React 绑定处理器，避免同一入口被连续点击两次后又折叠回去。
+    var deepest = [];
+    for (var i = 0; i < matches.length; i++) {
+      var containsMatch = false;
+      for (var j = 0; j < matches.length; j++) {
+        if (i !== j && matches[i].contains(matches[j])) {
+          containsMatch = true;
+          break;
+        }
+      }
+      if (!containsMatch) deepest.push(matches[i]);
+    }
+    return deepest;
   }
 
   function findDay(el) {

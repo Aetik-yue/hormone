@@ -76,10 +76,64 @@ void main() {
       expect(courses, hasLength(1));
       expect(courses.single['dayOfWeek'], 0);
     });
+
+    test('发现折叠课程时先展开并返回等待信号', () async {
+      final result = await _runExtractorRaw(r'''
+        const headers = makeHeaders([
+          [1, 100], [2, 200], [3, 300], [4, 400],
+          [5, 500], [6, 600], [7, 700]
+        ]);
+        const expander = new FakeElement('还有3条未展\n开 ▼', 380, 40);
+        installDocument(headers.concat([expander]));
+      ''');
+
+      expect(result, isA<Map<String, dynamic>>());
+      expect(result['__pending'], isTrue);
+      expect(result['reason'], 'expandingCollapsedCourses');
+      expect(result['expandedGroupCount'], 1);
+    });
+
+    test('等待展开完成后抓取原本隐藏的实验课', () async {
+      final courses = await _runExtractor(r'''
+        const headers = makeHeaders([
+          [1, 100], [2, 200], [3, 300], [4, 400],
+          [5, 500], [6, 600], [7, 700]
+        ]);
+        const hiddenText = '[188227-003]\n[1-16周] [8-9节] DS1401\n'
+            + '本科 - 操作系统实验';
+        const hiddenCourse = new FakeElement(hiddenText, 380, 40);
+        const expander = new FakeElement('还有1条未展开', 380, 40);
+        const elements = headers.concat([expander]);
+        expander.click = function() {
+          expander.innerText = '收起';
+          expander.textContent = '收起';
+          elements.push(hiddenCourse);
+        };
+        installDocument(elements);
+      ''', runs: 2);
+
+      expect(courses, hasLength(1));
+      expect(courses.single['name'], '操作系统实验');
+      expect(courses.single['dayOfWeek'], DateTime.thursday);
+      expect(courses.single['startSection'], 8);
+      expect(courses.single['endSection'], 9);
+      expect(courses.single['location'], 'DS1401');
+    });
   });
 }
 
-Future<List<Map<String, dynamic>>> _runExtractor(String fixtureSetup) async {
+Future<List<Map<String, dynamic>>> _runExtractor(
+  String fixtureSetup, {
+  int runs = 1,
+}) async {
+  final decoded = await _runExtractorRaw(fixtureSetup, runs: runs);
+  return (decoded as List<dynamic>).cast<Map<String, dynamic>>();
+}
+
+Future<dynamic> _runExtractorRaw(
+  String fixtureSetup, {
+  int runs = 1,
+}) async {
   final script = '''
     console.log = function() {};
 
@@ -108,6 +162,8 @@ Future<List<Map<String, dynamic>>> _runExtractor(String fixtureSetup) async {
       getBoundingClientRect() {
         return this._rect;
       }
+
+      click() {}
     }
 
     function makeHeaders(entries) {
@@ -129,7 +185,10 @@ Future<List<Map<String, dynamic>>> _runExtractor(String fixtureSetup) async {
 
     $fixtureSetup
 
-    const result = ${CquAdapter().extractJs};
+    let result;
+    for (let run = 0; run < $runs; run++) {
+      result = ${CquAdapter().extractJs};
+    }
     process.stdout.write(result);
   ''';
 
@@ -148,8 +207,7 @@ Future<List<Map<String, dynamic>>> _runExtractor(String fixtureSetup) async {
     if (result.exitCode != 0) {
       fail('Node 执行 CQU 提取脚本失败：${result.stderr}');
     }
-    final decoded = jsonDecode(result.stdout as String) as List<dynamic>;
-    return decoded.cast<Map<String, dynamic>>();
+    return jsonDecode(result.stdout as String);
   } finally {
     if (await tempFile.exists()) await tempFile.delete();
   }
