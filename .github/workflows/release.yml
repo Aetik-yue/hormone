@@ -4,9 +4,18 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build (for example v1.2.3)'
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -21,6 +30,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Validate release version
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'A stable vX.Y.Z release tag is required.' >&2
+            exit 1
+          fi
+          APP_VERSION=$(awk '/^version:/ {print $2}' pubspec.yaml)
+          if [ "${APP_VERSION%%+*}" != "${RELEASE_TAG#v}" ]; then
+            echo 'Release tag does not match pubspec.yaml.' >&2
+            exit 1
+          fi
 
       - name: Setup Flutter
         uses: subosito/flutter-action@f2c4f6686ca8e8d6e6d0f28410eeef506ed66aff # v2.18.0
@@ -99,7 +123,9 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk \
             | tee "$RUNNER_TEMP/hormone-apk-signature.txt"
-          grep -Fq 'Signer #1 certificate SHA-256 digest: 7206848b62105dcc9ea3e62a7a2f11158f14b6705849e10441dcf68fae52a6f6' \
+          grep -Fq 'Number of signers: 1' "$RUNNER_TEMP/hormone-apk-signature.txt"
+          # New build-tools use "V2 Signer" instead of "Signer #1".
+          grep -Fq 'certificate SHA-256 digest: 7206848b62105dcc9ea3e62a7a2f11158f14b6705849e10441dcf68fae52a6f6' \
             "$RUNNER_TEMP/hormone-apk-signature.txt"
 
       - name: Build App Bundle
@@ -109,8 +135,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/release
-          APK_NAME="hormone-${GITHUB_REF_NAME}-android.apk"
-          AAB_NAME="hormone-${GITHUB_REF_NAME}-android.aab"
+          APK_NAME="hormone-${RELEASE_TAG}-android.apk"
+          AAB_NAME="hormone-${RELEASE_TAG}-android.aab"
           cp build/app/outputs/flutter-apk/app-release.apk "build/release/$APK_NAME"
           cp build/app/outputs/bundle/release/app-release.aab "build/release/$AAB_NAME"
           cd build/release
@@ -119,7 +145,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: android-release-${{ github.ref_name }}
+          name: android-release-${{ env.RELEASE_TAG }}
           path: build/release/*
           if-no-files-found: error
 
@@ -128,7 +154,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="$GITHUB_REF_NAME"
+          TAG="$RELEASE_TAG"
           VERSION="${TAG#v}"
           APK="build/release/hormone-${TAG}-android.apk"
           AAB="build/release/hormone-${TAG}-android.aab"

@@ -168,6 +168,11 @@ version: major.minor.patch+buildNumber
    `version/<版本>/更新日志.md`，会直接作为 Release 说明。
 6. 确认 GitHub Release 中同时存在 APK、AAB、APK.sha256 三个资产。
 
+若构建因发布工作流问题失败，在 `main`/`develop` 修复工作流后，可在 Actions →
+Release Build → Run workflow 中选择 `main`，输入已存在的标签（如 `v1.2.3`）重试。
+手动入口使用修复后的工作流、检出指定标签的应用源码，并校验标签与版本号一致；
+不需要移动、删除或重建已推送的版本标签。
+
 App 通过 GitHub 的 `releases/latest` 接口检查最新正式版本。请勿只上传 Actions
 Artifact，也不要把常规版本标记为 draft/prerelease，否则客户端不会发现它。
 
