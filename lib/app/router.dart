@@ -8,26 +8,25 @@ import 'package:hormone/features/import/presentation/course_capture_guide_screen
 import 'package:hormone/features/import/presentation/webview_import_screen.dart';
 import 'package:hormone/features/settings/presentation/settings_screen.dart';
 
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final appRouter = GoRouter(
+  navigatorKey: rootNavigatorKey,
   initialLocation: '/',
   routes: [
-    GoRoute(
-      path: '/',
-      builder: (context, state) => const ScheduleScreen(),
-    ),
+    GoRoute(path: '/', builder: (context, state) => const ScheduleScreen()),
     GoRoute(
       path: '/course/edit',
-      builder: (context, state) => CourseEditScreen(
-          courseId: state.extra is String ? state.extra as String : null),
+      builder:
+          (context, state) => CourseEditScreen(
+            courseId: state.extra is String ? state.extra as String : null,
+          ),
     ),
     GoRoute(
       path: '/semester',
       builder: (context, state) => const SemesterScreen(),
     ),
-    GoRoute(
-      path: '/import',
-      builder: (context, state) => const ImportScreen(),
-    ),
+    GoRoute(path: '/import', builder: (context, state) => const ImportScreen()),
     GoRoute(
       path: '/import/guide',
       builder: (context, state) => const CourseCaptureGuideScreen(),
@@ -41,7 +40,7 @@ final appRouter = GoRouter(
       builder: (context, state) => const SettingsScreen(),
     ),
   ],
-  errorBuilder: (context, state) => Scaffold(
-    body: Center(child: Text('页面未找到: ${state.uri}')),
-  ),
+  errorBuilder:
+      (context, state) =>
+          Scaffold(body: Center(child: Text('页面未找到: ${state.uri}'))),
 );

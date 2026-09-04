@@ -401,7 +401,7 @@ packages:
     source: hosted
     version: "0.15.6"
   http:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: http
       sha256: "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"
@@ -568,6 +568,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "9.5.0"
+  ota_update:
+    dependency: "direct main"
+    description:
+      name: ota_update
+      sha256: "1f4c7c3c4f306729a6c00b84435096ce2d8b28439013f7237173acc699b2abc8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.1.0"
   package_config:
     dependency: transitive
     description:
@@ -689,13 +697,13 @@ packages:
     source: hosted
     version: "6.5.2"
   pub_semver:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: pub_semver
-      sha256: "5bfcf68ca79ef689f8990d1160781b4bad40a3bd5e5218ad4076ddb7f4081585"
+      sha256: "261236774e8b1d69cfc6b9eabbc96c40f25e7a2d6b171f3385d4f65d5734fb24"
       url: "https://pub.dev"
     source: hosted
-    version: "2.2.0"
+    version: "2.2.1"
   pubspec_parse:
     dependency: transitive
     description:

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,8 @@ import 'package:hormone/features/notification/application/reminder_settings_prov
 import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/settings/application/section_times_provider.dart';
 import 'package:hormone/features/settings/application/theme_mode_provider.dart';
+import 'package:hormone/features/update/application/app_update_controller.dart';
+import 'package:hormone/features/update/presentation/update_dialog.dart';
 import 'package:hormone/features/widget/application/widget_service.dart';
 
 void main() {
@@ -61,6 +64,19 @@ class _AppEffectsState extends ConsumerState<_AppEffects>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scheduleMidnightRefresh();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForAppUpdate());
+  }
+
+  /// Android 启动后每天最多检查一次；无更新或网络失败时不打扰用户。
+  Future<void> _checkForAppUpdate() async {
+    if (!Platform.isAndroid) return;
+    final release = await ref
+        .read(appUpdateControllerProvider.notifier)
+        .checkForUpdate(automatic: true);
+    if (!mounted || release == null) return;
+    final navigatorContext = rootNavigatorKey.currentContext;
+    if (navigatorContext == null) return;
+    await showAppUpdateDialog(navigatorContext, release);
   }
 
   @override
@@ -103,8 +119,7 @@ class _AppEffectsState extends ConsumerState<_AppEffects>
 
   void _scheduleReminderRefresh() {
     _reminderDebounce?.cancel();
-    _reminderDebounce =
-        Timer(const Duration(milliseconds: 800), () {
+    _reminderDebounce = Timer(const Duration(milliseconds: 800), () {
       _notificationService?.reschedule();
     });
   }

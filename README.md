@@ -3,9 +3,9 @@
 [![CI](https://github.com/Aetik-yue/hormone/actions/workflows/ci.yml/badge.svg)](https://github.com/Aetik-yue/hormone/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Aetik-yue/hormone)](https://github.com/Aetik-yue/hormone/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Flutter](https://img.shields.io/badge/Flutter-3.5+-02569B.svg)](https://flutter.dev)
+[![Flutter](https://img.shields.io/badge/Flutter-3.29+-02569B.svg)](https://flutter.dev)
 
-一款简洁、轻量的 Android 大学课程表 App。
+一款简洁、轻量的 Android 大学课程表 App（Android 7.0+）。
 
 ## 截图
 
@@ -56,18 +56,20 @@
 - **导出备份**：一键导出全部学期和课程为 JSON，通过系统分享面板保存
 - **从备份恢复**：全量恢复多个学期与课程，激活学期与周次覆盖一并还原
 - **桌面小组件**：通过 Android App Widget 显示今日课程，数据变化自动刷新，跨午夜同步更新
+- **应用内更新**：每天自动检查 GitHub Release，也可在设置中手动检查；支持更新说明、下载进度与 SHA-256 完整性校验
 
 ## 技术栈
 
 | 类别 | 技术 |
 |------|------|
-| 框架 | Flutter 3.5+ / Dart |
+| 框架 | Flutter 3.29+ / Dart 3.7+ |
 | 状态管理 | flutter_riverpod（Provider / StateNotifier / StreamProvider） |
 | 数据库 | drift（SQLite），后台 isolate 打开 |
 | 路由 | go_router |
 | WebView | webview_flutter（教务系统登录抓取） |
 | 本地通知 | flutter_local_notifications（课前提醒） |
 | 桌面小组件 | home_widget |
+| 应用内更新 | GitHub Releases + ota_update |
 | 分享 | share_plus（导出备份转存） |
 | CI/CD | GitHub Actions |
 
@@ -93,6 +95,7 @@ lib/
     ├── schedule/     # 周视图主界面（今日视图、课程搜索、详情弹层）
     ├── semester/     # 学期管理
     ├── settings/     # 设置（主题/节次时间/提醒/备份恢复）
+    ├── update/       # 应用内更新（版本检查、APK 下载与系统安装）
     └── widget/       # 桌面小组件数据桥接
 ```
 
@@ -102,7 +105,7 @@ lib/
 
 ### 前置要求
 
-- Flutter SDK >= 3.3.0（Dart >= 3.3.0）
+- Flutter SDK >= 3.29.0（Dart >= 3.7.0）
 - Android Studio（包含 Android SDK 与 JDK）
 - Node.js（仅部分适配器测试需要：用 Node 执行提取脚本做单测）
 
@@ -172,9 +175,10 @@ flutter build appbundle --release
 
 ### CI 自动构建
 
-推送 `v*` tag（如 `v1.2.2`）会触发 [Release Build](.github/workflows/release.yml)，
-在干净环境重建 `android/`、注入小组件模板与 Gradle 配置后构建 APK/AAB 并上传到
-Actions Artifacts。
+推送 `v*` tag（如 `v1.2.3`）会触发 [Release Build](.github/workflows/release.yml)，
+在干净环境重建 `android/`、注入原生模板与稳定签名配置，构建 APK/AAB、生成
+SHA-256 校验文件，并自动发布为 GitHub Release；App 的更新检查会读取这里的最新正式版本。
+首次配置签名密钥与 GitHub Actions Secrets 的步骤见 [Android 发布指南](docs/RELEASE.md)。
 
 ## 适配新学校
 

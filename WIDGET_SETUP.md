@@ -15,26 +15,37 @@ flutter create . --platforms=android --org com.aetikyue
 flutter pub get
 ```
 
-## 2. 复制小组件模板
+## 2. 复制 Android 原生模板
 
 | 模板文件 | 目标位置 |
 |---|---|
+| `native_templates/android/app/build.gradle.kts` | `android/app/build.gradle.kts` |
+| `native_templates/android/app/src/main/AndroidManifest.xml` | `android/app/src/main/AndroidManifest.xml` |
 | `native_templates/android/app/src/main/java/com/aetikyue/hormone/CourseWidgetProvider.kt` | `android/app/src/main/java/com/aetikyue/hormone/CourseWidgetProvider.kt` |
 | `native_templates/android/app/src/main/res/xml/course_widget_info.xml` | `android/app/src/main/res/xml/course_widget_info.xml` |
 | `native_templates/android/app/src/main/res/layout/course_widget.xml` | `android/app/src/main/res/layout/course_widget.xml` |
+| `native_templates/android/app/src/main/res/xml/filepaths.xml` | `android/app/src/main/res/xml/filepaths.xml` |
 
 模板中的 Kotlin 包名与真实包名 `com.aetikyue.hormone` 一致，复制后无需修改。
 
-## 3. 注册 Receiver
+也可以在 PowerShell 中一次性覆盖复制整个原生模板：
 
-把 `native_templates/android/app/src/main/AndroidManifest.receiver.xml` 中的
-`<receiver>...</receiver>` 合并到
-`android/app/src/main/AndroidManifest.xml` 的 `<application>` 标签内。
+```powershell
+Copy-Item native_templates/android/app/build.gradle.kts android/app/build.gradle.kts -Force
+Copy-Item native_templates/android/app/src/main/* android/app/src/main/ -Recurse -Force
+```
+
+Gradle 模板包含 API 24 最低版本、更新插件需要的 desugaring 版本和固定签名配置。
+若旧的本地工程仍有 `android/app/build.gradle`，请先备份并合并其中的自定义配置，
+最终只保留一种 app 模块构建脚本，避免 Groovy 文件优先于 Kotlin 模板。
+
+完整的 `AndroidManifest.xml` 已注册桌面小组件 Receiver 与应用内更新所需的
+FileProvider/安装权限；`AndroidManifest.receiver.xml` 仅作为 Receiver 片段参考。
 
 Android 上 `home_widget` 将数据写入 `HomeWidgetSharedPreferences`；
 `CourseWidgetProvider` 读取其中的 `widget_title` 和 `courses`，无需额外的数据服务。
 
-## 4. 验证
+## 3. 验证
 
 ```bash
 dart run build_runner build --delete-conflicting-outputs
@@ -46,7 +57,7 @@ flutter run
 打开课表主页后返回系统桌面，添加“今日课程”小组件。小组件应显示当天课程；
 点击后应能拉起 App。
 
-## 5. 已知限制
+## 4. 已知限制
 
 - 小组件刷新集中由应用根部的 `_AppEffects` 驱动：监听学期/课程/节次变化（防抖）
   与回到前台、跨过午夜时补刷；App 未在后台运行时不刷新。

@@ -58,6 +58,8 @@ native_templates/**/.gradle/
 google-services.json
 GoogleService-Info.plist
 key.properties
+*.jks
+*.keystore
 
 # Tool/internal files
 .workbuddy/

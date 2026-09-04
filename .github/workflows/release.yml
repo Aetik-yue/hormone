@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 jobs:
@@ -40,8 +40,43 @@ jobs:
           sed "s/__NDK_VERSION__/$NDK_VERSION/g" native_templates/android/build.gradle > android/build.gradle
           cp native_templates/android/settings.gradle android/settings.gradle
           cp native_templates/android/gradle/wrapper/gradle-wrapper.properties android/gradle/wrapper/gradle-wrapper.properties
-          # app 模块启用 core library desugaring（flutter_local_notifications 依赖）并保持小组件原生配置。
+          # app 模块启用 desugaring、固定签名、小组件和应用内更新原生配置。
           cp native_templates/android/app/build.gradle.kts android/app/build.gradle.kts
+          cp native_templates/android/app/src/main/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          mkdir -p android/app/src/main/java/com/aetikyue/hormone
+          mkdir -p android/app/src/main/res/layout android/app/src/main/res/xml
+          cp native_templates/android/app/src/main/java/com/aetikyue/hormone/CourseWidgetProvider.kt \
+            android/app/src/main/java/com/aetikyue/hormone/CourseWidgetProvider.kt
+          cp native_templates/android/app/src/main/res/layout/course_widget.xml \
+            android/app/src/main/res/layout/course_widget.xml
+          cp native_templates/android/app/src/main/res/xml/course_widget_info.xml \
+            android/app/src/main/res/xml/course_widget_info.xml
+          cp native_templates/android/app/src/main/res/xml/filepaths.xml \
+            android/app/src/main/res/xml/filepaths.xml
+
+      - name: Configure stable release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+
+          KEYSTORE_PATH="$RUNNER_TEMP/hormone-release-key.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          {
+            printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'storeFile=%s\n' "$KEYSTORE_PATH"
+          } > android/key.properties
 
       - name: Get dependencies
         run: flutter pub get
@@ -58,14 +93,54 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
+      - name: Verify APK signing continuity
+        run: |
+          set -euo pipefail
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk \
+            | tee "$RUNNER_TEMP/hormone-apk-signature.txt"
+          grep -Fq 'Signer #1 certificate SHA-256 digest: 7206848b62105dcc9ea3e62a7a2f11158f14b6705849e10441dcf68fae52a6f6' \
+            "$RUNNER_TEMP/hormone-apk-signature.txt"
+
       - name: Build App Bundle
         run: flutter build appbundle --release
+
+      - name: Prepare signed release assets
+        run: |
+          set -euo pipefail
+          mkdir -p build/release
+          APK_NAME="hormone-${GITHUB_REF_NAME}-android.apk"
+          AAB_NAME="hormone-${GITHUB_REF_NAME}-android.aab"
+          cp build/app/outputs/flutter-apk/app-release.apk "build/release/$APK_NAME"
+          cp build/app/outputs/bundle/release/app-release.aab "build/release/$AAB_NAME"
+          cd build/release
+          sha256sum "$APK_NAME" > "$APK_NAME.sha256"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-release-${{ github.ref_name }}
-          path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/bundle/release/app-release.aab
+          path: build/release/*
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          VERSION="${TAG#v}"
+          APK="build/release/hormone-${TAG}-android.apk"
+          AAB="build/release/hormone-${TAG}-android.aab"
+          CHECKSUM="${APK}.sha256"
+          NOTES="version/${VERSION}/更新日志.md"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" "$AAB" "$CHECKSUM" --clobber
+          elif [ -f "$NOTES" ]; then
+            gh release create "$TAG" "$APK" "$AAB" "$CHECKSUM" \
+              --title "Hormone $TAG" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" "$APK" "$AAB" "$CHECKSUM" \
+              --title "Hormone $TAG" --generate-notes
+          fi

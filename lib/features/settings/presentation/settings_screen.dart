@@ -11,6 +11,8 @@ import 'package:hormone/data/repositories/backup_repository.dart';
 import 'package:hormone/features/notification/application/notification_service.dart';
 import 'package:hormone/features/notification/application/reminder_settings_provider.dart';
 import 'package:hormone/features/semester/application/semester_providers.dart';
+import 'package:hormone/features/update/application/app_update_controller.dart';
+import 'package:hormone/features/update/presentation/update_dialog.dart';
 import '../application/theme_mode_provider.dart';
 import '../application/section_times_provider.dart';
 import '../application/export_service.dart';
@@ -31,6 +33,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(themeModeProvider);
     final reminder = ref.watch(reminderSettingsProvider);
+    final appUpdate = ref.watch(appUpdateControllerProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('设置'),
@@ -45,8 +48,9 @@ class SettingsScreen extends ConsumerWidget {
           const _SectionHeader('外观'),
           _AppearanceCard(
             mode: mode,
-            onChanged: (next) =>
-                ref.read(themeModeProvider.notifier).setThemeMode(next),
+            onChanged:
+                (next) =>
+                    ref.read(themeModeProvider.notifier).setThemeMode(next),
           ),
 
           // ── 学期 ──
@@ -86,12 +90,12 @@ class SettingsScreen extends ConsumerWidget {
                 return;
               }
               final granted =
-                  await ref.read(notificationServiceProvider).requestPermission();
+                  await ref
+                      .read(notificationServiceProvider)
+                      .requestPermission();
               if (!granted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('需要通知权限才能开启课前提醒，请在系统设置中授权'),
-                  ),
+                  const SnackBar(content: Text('需要通知权限才能开启课前提醒，请在系统设置中授权')),
                 );
                 return;
               }
@@ -105,22 +109,25 @@ class SettingsScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
               child: Row(
                 children: [
-                  Text('提前',
-                      style: Theme.of(context).textTheme.bodyMedium),
+                  Text('提前', style: Theme.of(context).textTheme.bodyMedium),
                   const SizedBox(width: 12),
                   Expanded(
                     child: SegmentedButton<int>(
-                      segments: reminderLeadOptions
-                          .map((m) => ButtonSegment(
-                                value: m,
-                                label: Text('$m 分钟'),
-                              ))
-                          .toList(),
+                      segments:
+                          reminderLeadOptions
+                              .map(
+                                (m) => ButtonSegment(
+                                  value: m,
+                                  label: Text('$m 分钟'),
+                                ),
+                              )
+                              .toList(),
                       selected: {reminder.leadMinutes},
                       showSelectedIcon: false,
-                      onSelectionChanged: (s) => ref
-                          .read(reminderSettingsProvider.notifier)
-                          .setLeadMinutes(s.first),
+                      onSelectionChanged:
+                          (s) => ref
+                              .read(reminderSettingsProvider.notifier)
+                              .setLeadMinutes(s.first),
                     ),
                   ),
                 ],
@@ -167,6 +174,26 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(height: 1),
 
+          // ── 应用更新 ──
+          const _SectionHeader('应用更新'),
+          ListTile(
+            leading: const Icon(Icons.system_update_alt_rounded),
+            title: const Text('检查更新'),
+            subtitle: Text(_updateSubtitle(appUpdate)),
+            trailing:
+                appUpdate.isBusy
+                    ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.chevron_right),
+            onTap:
+                appUpdate.isBusy
+                    ? null
+                    : () => _checkForUpdates(context, ref, appUpdate),
+          ),
+          const Divider(height: 1),
+
           // ── 关于 ──
           const _SectionHeader('关于'),
           ListTile(
@@ -189,6 +216,51 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  String _updateSubtitle(AppUpdateState state) {
+    switch (state.status) {
+      case AppUpdateStatus.idle:
+        return '每天自动检查 GitHub 正式版本，也可手动检查';
+      case AppUpdateStatus.checking:
+        return '正在检查新版本…';
+      case AppUpdateStatus.updateAvailable:
+        return '可更新到 ${state.release?.tagName ?? '新版本'}';
+      case AppUpdateStatus.upToDate:
+        return '已是最新版本${state.installedVersion == null ? '' : ' · v${state.installedVersion}'}';
+      case AppUpdateStatus.downloading:
+        return '正在下载 ${(state.progress * 100).round()}%';
+      case AppUpdateStatus.installing:
+        return '安装包已下载，请在系统页面确认安装';
+      case AppUpdateStatus.failed:
+        return state.message ?? '更新失败，点按重试';
+    }
+  }
+
+  Future<void> _checkForUpdates(
+    BuildContext context,
+    WidgetRef ref,
+    AppUpdateState currentState,
+  ) async {
+    if (currentState.release != null &&
+        (currentState.status == AppUpdateStatus.updateAvailable ||
+            currentState.status == AppUpdateStatus.failed)) {
+      await showAppUpdateDialog(context, currentState.release!);
+      return;
+    }
+
+    final release =
+        await ref.read(appUpdateControllerProvider.notifier).checkForUpdate();
+    if (!context.mounted) return;
+    if (release != null) {
+      await showAppUpdateDialog(context, release);
+      return;
+    }
+
+    final result = ref.read(appUpdateControllerProvider);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message ?? '未发现可用更新')));
+  }
+
   /// 打开 GitHub 仓库页面（外部浏览器）。
   Future<void> _openGithub(BuildContext context) async {
     final uri = Uri.parse(_githubUrl);
@@ -202,9 +274,9 @@ class SettingsScreen extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('打开失败：$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('打开失败：$e')));
       }
     }
   }
@@ -223,9 +295,7 @@ class SettingsScreen extends ConsumerWidget {
     try {
       await ref.read(exportServiceProvider).exportToJson();
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('导出失败：$e')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('导出失败：$e')));
     }
   }
 
@@ -254,37 +324,37 @@ class SettingsScreen extends ConsumerWidget {
       final parsed = BackupFile.parse(jsonText);
       previewSemesters = parsed.semesters.length;
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('备份文件无效：$e')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('备份文件无效：$e')));
       return;
     }
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('恢复备份？'),
-        content: Text(
-          '将用备份中的 $previewSemesters 个学期替换当前全部学期和课程，'
-          '此操作不可撤销。确定继续吗？',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('恢复备份？'),
+            content: Text(
+              '将用备份中的 $previewSemesters 个学期替换当前全部学期和课程，'
+              '此操作不可撤销。确定继续吗？',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('恢复'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('恢复'),
-          ),
-        ],
-      ),
     );
     if (confirm != true || !context.mounted) return;
 
     try {
-      final result2 =
-          await ref.read(backupRepositoryProvider).restore(jsonText);
+      final result2 = await ref
+          .read(backupRepositoryProvider)
+          .restore(jsonText);
       // 刷新依赖学期/课程数据的全部 Provider（桌面小组件由 _AppEffects
       // 监听这些 provider 集中触发刷新）。
       ref.invalidate(activeSemesterProvider);
@@ -293,7 +363,8 @@ class SettingsScreen extends ConsumerWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-              '已恢复 ${result2.semesterCount} 个学期、${result2.courseCount} 门课程'),
+            '已恢复 ${result2.semesterCount} 个学期、${result2.courseCount} 门课程',
+          ),
         ),
       );
     } catch (e) {
@@ -313,9 +384,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -326,10 +397,7 @@ class _AppearanceCard extends StatelessWidget {
   final ThemeMode mode;
   final ValueChanged<ThemeMode> onChanged;
 
-  const _AppearanceCard({
-    required this.mode,
-    required this.onChanged,
-  });
+  const _AppearanceCard({required this.mode, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -371,8 +439,8 @@ class _AppearanceCard extends StatelessWidget {
                         mode == ThemeMode.system
                             ? '当前跟随系统使用${effectiveBrightness == Brightness.dark ? '深色' : '浅色'}模式'
                             : mode == ThemeMode.dark
-                                ? '降低夜间使用时的屏幕眩光'
-                                : '明亮清晰，适合日间查看课表',
+                            ? '降低夜间使用时的屏幕眩光'
+                            : '明亮清晰，适合日间查看课表',
                         style: theme.textTheme.bodySmall,
                       ),
                     ],
@@ -449,9 +517,11 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
                     child: const Text('模板'),
                   ),
                   TextButton(
-                    onPressed: () => ref
-                        .read(sectionTimesProvider.notifier)
-                        .resetToDefault(),
+                    onPressed:
+                        () =>
+                            ref
+                                .read(sectionTimesProvider.notifier)
+                                .resetToDefault(),
                     child: const Text('恢复默认'),
                   ),
                 ],
@@ -466,18 +536,23 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
                   final section = i + 1;
                   final sectionTime = times[section];
                   final startTime = sectionTime?.startTime ?? '';
-                  final duration = sectionTime?.durationMinutes ??
+                  final duration =
+                      sectionTime?.durationMinutes ??
                       AppConstants.defaultSectionDuration;
                   final endTime = sectionTime?.endTime ?? '';
                   return Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
                     child: Row(
                       children: [
                         SizedBox(
                           width: 56,
-                          child: Text('第 $section 节',
-                              style: theme.textTheme.bodyMedium),
+                          child: Text(
+                            '第 $section 节',
+                            style: theme.textTheme.bodyMedium,
+                          ),
                         ),
                         InkWell(
                           onTap: () => _pickTime(context, section, startTime),
@@ -498,15 +573,19 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
                         ),
                         const SizedBox(width: 8),
                         DropdownButton<int>(
-                          value: _durationOptions.contains(duration)
-                              ? duration
-                              : null,
-                          items: _durationOptions
-                              .map((d) => DropdownMenuItem(
-                                    value: d,
-                                    child: Text('$d 分'),
-                                  ))
-                              .toList(),
+                          value:
+                              _durationOptions.contains(duration)
+                                  ? duration
+                                  : null,
+                          items:
+                              _durationOptions
+                                  .map(
+                                    (d) => DropdownMenuItem(
+                                      value: d,
+                                      child: Text('$d 分'),
+                                    ),
+                                  )
+                                  .toList(),
                           onChanged: (v) {
                             if (v != null) {
                               ref
@@ -518,8 +597,9 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
                         const Spacer(),
                         Text(
                           endTime.isNotEmpty ? '→ $endTime' : '',
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: theme.hintColor),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                          ),
                         ),
                       ],
                     ),
@@ -534,14 +614,18 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
   }
 
   Future<void> _pickTime(
-      BuildContext context, int section, String current) async {
+    BuildContext context,
+    int section,
+    String current,
+  ) async {
     final parts = current.split(':');
-    final initial = parts.length == 2
-        ? TimeOfDay(
-            hour: int.tryParse(parts[0]) ?? 8,
-            minute: int.tryParse(parts[1]) ?? 0,
-          )
-        : const TimeOfDay(hour: 8, minute: 0);
+    final initial =
+        parts.length == 2
+            ? TimeOfDay(
+              hour: int.tryParse(parts[0]) ?? 8,
+              minute: int.tryParse(parts[1]) ?? 0,
+            )
+            : const TimeOfDay(hour: 8, minute: 0);
 
     final picked = await showTimePicker(
       context: context,
@@ -573,20 +657,24 @@ class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
             children: [
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('选择节次模板',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                child: Text(
+                  '选择节次模板',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
               const Divider(height: 1),
-              ...sectionTimeTemplates.map((template) => ListTile(
-                    title: Text(template.name),
-                    subtitle: Text('${template.duration} 分钟/节'),
-                    onTap: () {
-                      ref
-                          .read(sectionTimesProvider.notifier)
-                          .applyTemplate(template);
-                      Navigator.of(ctx).pop();
-                    },
-                  )),
+              ...sectionTimeTemplates.map(
+                (template) => ListTile(
+                  title: Text(template.name),
+                  subtitle: Text('${template.duration} 分钟/节'),
+                  onTap: () {
+                    ref
+                        .read(sectionTimesProvider.notifier)
+                        .applyTemplate(template);
+                    Navigator.of(ctx).pop();
+                  },
+                ),
+              ),
             ],
           ),
         );
