@@ -6,6 +6,7 @@ import 'school_adapter.dart';
 /// 课表页 URL：/tt/university-timetable
 /// 页面为 div 网格布局，每个课程卡片文本格式：
 ///   [课程编号]\n[周次周] [节次节] 教室\n本科 - 课程名
+/// 实验卡片可能没有课程编号：课程名[实验项目]\n[周次周] [节次节] 教室。
 /// 星期信息来自网格列位置或父级 data 属性。
 class CquAdapter extends SchoolAdapter {
   @override
@@ -62,8 +63,8 @@ class CquAdapter extends SchoolAdapter {
     }
   }
 
-  // ═══ 策略1：找所有包含课程编号+周次信息的元素 ═══
-  // 课程卡片文本特征：包含 [数字-数字] 和 X周 和 X节
+  // ═══ 策略1：找包含课程名称、周次和节次的单张卡片 ═══
+  // 普通课带课程编号，实验课可能只有「课程名[实验项目]」。
   var allEls = document.body.querySelectorAll('*');
   var candidates = [];
 
@@ -72,8 +73,8 @@ class CquAdapter extends SchoolAdapter {
     // 只看直接文本内容较长的元素（课程卡片）
     var t = (el.innerText || el.textContent || '').trim();
     if (t.length < 10 || t.length > 500) continue;
-    // 必须包含课程编号格式 [数字-数字]
-    if (!/\[\d{4,}-\d{2,}/.test(t)) continue;
+    // 无编号课程必须有完整标题，不能把仅含时间/教室的子元素当成卡片。
+    if (!/\[\d{4,}-\d{2,}/.test(t) && !uncodedTitle(t)) continue;
     // 必须包含周次信息
     if (!/\d+.*周/.test(t)) continue;
     // 必须包含节次信息
@@ -81,6 +82,9 @@ class CquAdapter extends SchoolAdapter {
     // 排除包含多个课程编号的父容器（保留最内层匹配元素）
     var codeMatches = t.match(/\[\d{4,}-\d{2,}[^\]]*\]/g);
     if (codeMatches && codeMatches.length > 1) continue;
+    // 实验课没有编号，按周次/节次数量排除包含多张卡片的父容器。
+    if ((t.match(/\[[^\[\]]*周\]/g) || []).length !== 1 ||
+        (t.match(/\[[^\[\]]*节\]/g) || []).length !== 1) continue;
     candidates.push(el);
   }
 
@@ -105,10 +109,7 @@ class CquAdapter extends SchoolAdapter {
   filtered.forEach(function(el) {
     var text = (el.innerText || el.textContent || '').trim();
 
-    // 解析课程编号
-    var codeMatch = text.match(/\[(\d{4,}-\d{2,}(?:-\w+)?)\]/);
-    if (!codeMatch) return;
-    var code = codeMatch[1];
+    var labTitle = uncodedTitle(text);
 
     // 解析周次：支持 [1-7周], [1-3,5-14周], [5、7-9、11-15周] 等
     // 也支持 单周（奇数周）和 双周（偶数周）
@@ -138,13 +139,20 @@ class CquAdapter extends SchoolAdapter {
     // 解析教室：节次后面、换行前的文本
     var locMatch = text.match(/\d+\s*节\]\s*([^\n\[]+)/);
     var location = locMatch ? locMatch[1].trim() : null;
+    // 无编号卡片的标题位于时间之前，节次后都是教室；兼容窄列换行。
+    if (labTitle && secMatch) {
+      location = text.slice(secMatch.index + secMatch[0].length)
+          .replace(/\r?\n\s*/g, '').trim() || null;
+    }
     // 清理教室名（去掉尾部空格和特殊字符）
     if (location && location.length > 30) location = null;
 
     // 解析课程名：「本科 - XXX」或「研究生 - XXX」
     var nameMatch = text.match(/(?:本科|研究生|专科)\s*[-–—]\s*([^\n\[]+)/);
     var name = '';
-    if (nameMatch) {
+    if (labTitle) {
+      name = labTitle;
+    } else if (nameMatch) {
       name = nameMatch[1].trim();
     } else {
       // 兜底：取最后一个非编号、非周次节次的行
@@ -169,7 +177,7 @@ class CquAdapter extends SchoolAdapter {
     var day = findDay(el);
 
     // 去重 key（含教室，避免同名同学期同学时不同教室的课程被合并）
-    var key = name + '|' + day + '|' + startSec + '|' + (location || '') + '|' + weeks.join(',');
+    var key = name + '|' + day + '|' + startSec + '|' + endSec + '|' + (location || '') + '|' + weeks.join(',');
     if (seen[key]) return;
     seen[key] = true;
 
@@ -237,6 +245,17 @@ class CquAdapter extends SchoolAdapter {
   }
 
   return JSON.stringify(results);
+
+  function uncodedTitle(text) {
+    if (/\[\d{4,}-\d{2,}/.test(text)) return '';
+    var week = text.match(/\[(?:\d[^\[\]]*|单|双)周\]/);
+    if (!week) return '';
+    // 以周次括号为边界，保留标题中的实验项目括号及英文空格。
+    var title = text.slice(0, week.index).replace(/\r?\n\s*/g, '').trim()
+        .replace(/^(本科|研究生|专科)\s*[-–—]\s*/, '');
+    if (title.length < 2 || title.length > 200 || /^\[/.test(title)) return '';
+    return title;
+  }
 
   function parseRange(text) {
     if (!text) return [];
