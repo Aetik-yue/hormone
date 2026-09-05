@@ -8,6 +8,7 @@ class AppRelease {
   final String notes;
   final Uri pageUrl;
   final Uri apkUrl;
+  final List<Uri> fallbackUrls;
   final String apkFileName;
   final int apkSize;
   final String sha256;
@@ -20,6 +21,7 @@ class AppRelease {
     required this.notes,
     required this.pageUrl,
     required this.apkUrl,
+    this.fallbackUrls = const [],
     required this.apkFileName,
     required this.apkSize,
     required this.sha256,
@@ -34,4 +36,6 @@ class AppRelease {
 
   bool isNewerThan(String installedVersion) =>
       version > parseVersion(installedVersion);
+
+  List<Uri> get downloadUrls => [apkUrl, ...fallbackUrls].toSet().toList();
 }

@@ -119,7 +119,11 @@ Future<void> showAppUpdateDialog(
                     isDownloading
                         ? '${(state.progress * 100).round()}%'
                         : failed
-                        ? '重新下载'
+                        ? dialogRef
+                                .read(appUpdateControllerProvider.notifier)
+                                .hasDownloadedApk
+                            ? '重试安装'
+                            : '重新下载'
                         : isInstalling
                         ? '等待安装'
                         : '下载并安装',

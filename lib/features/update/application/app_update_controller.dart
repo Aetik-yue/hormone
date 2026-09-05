@@ -1,12 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'package:ota_update/ota_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/github_release_repository.dart';
+import '../data/update_downloader.dart';
+import '../data/update_installer.dart';
 import '../domain/app_release.dart';
 
 enum AppUpdateStatus {
@@ -57,17 +59,22 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
   static const _automaticCheckInterval = Duration(hours: 24);
 
   final GitHubReleaseRepository _repository;
-  final OtaUpdate Function() _otaUpdateFactory;
-  OtaUpdate? _activeOtaUpdate;
-  StreamSubscription<OtaEvent>? _subscription;
+  final UpdateDownloader _downloader;
+  final UpdateInstaller _installer;
+  Future<void>? _downloadJob;
+  bool _cancelRequested = false;
+  File? _downloadedApk;
+  String? _downloadedChecksum;
 
   AppUpdateController(
     this._repository, {
-    OtaUpdate Function()? otaUpdateFactory,
-  }) : _otaUpdateFactory = otaUpdateFactory ?? OtaUpdate.new,
+    UpdateDownloader? downloader,
+    UpdateInstaller? installer,
+  }) : _downloader = downloader ?? UpdateDownloader(),
+       _installer = installer ?? UpdateInstaller(),
        super(const AppUpdateState());
 
-  /// 检查 GitHub 最新正式 Release。自动检查最多每天一次。
+  /// 检查更新源的最新正式版本。自动检查最多每天一次。
   Future<AppRelease?> checkForUpdate({bool automatic = false}) async {
     if (state.isBusy) return null;
 
@@ -98,6 +105,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
 
       final packageInfo = await PackageInfo.fromPlatform();
       final release = await _repository.fetchLatestRelease();
+      if (!mounted) return null;
       if (release.isNewerThan(packageInfo.version)) {
         state = AppUpdateState(
           status: AppUpdateStatus.updateAvailable,
@@ -115,6 +123,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       );
       return null;
     } catch (error) {
+      if (!mounted) return null;
       state = AppUpdateState(
         status: automatic ? AppUpdateStatus.idle : AppUpdateStatus.failed,
         installedVersion: state.installedVersion,
@@ -125,96 +134,96 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
     }
   }
 
-  /// 下载 APK、校验 SHA-256，随后打开 Android 系统安装确认页。
-  Future<void> downloadAndInstall() async {
+  /// 下载、校验与安装分开，切换线路不会触发旧下载的安装回调。
+  Future<void> downloadAndInstall() {
     final release = state.release;
-    if (release == null || state.isBusy) return;
-
-    await _subscription?.cancel();
+    if (release == null || state.isBusy || _downloadJob != null) {
+      return Future.value();
+    }
+    _cancelRequested = false;
     state = AppUpdateState(
       status: AppUpdateStatus.downloading,
       installedVersion: state.installedVersion,
       release: release,
-      message: '正在下载安装包…',
+      message: '正在连接下载源…',
     );
+    final job = _downloadAndInstall(release);
+    _downloadJob = job;
+    return job.whenComplete(() => _downloadJob = null);
+  }
 
+  Future<void> _downloadAndInstall(AppRelease release) async {
     try {
-      final otaUpdate = _otaUpdateFactory();
-      _activeOtaUpdate = otaUpdate;
-      _subscription = otaUpdate
-          .execute(
-            release.apkUrl.toString(),
-            destinationFilename: release.apkFileName,
-            sha256checksum: release.sha256,
-          )
-          .listen(
-            _handleOtaEvent,
-            onError: (Object error, StackTrace stackTrace) {
-              _setFailure('下载更新失败：${_readableError(error)}');
-            },
+      if (_downloadedChecksum != release.sha256 ||
+          _downloadedApk == null ||
+          !await _downloadedApk!.exists()) {
+        if (!mounted || _cancelRequested) return;
+        final apk = await _downloader.download(release, (progress) {
+          if (!mounted || _cancelRequested) return;
+          final fraction =
+              progress.total > 0
+                  ? (progress.received / progress.total).clamp(0.0, 1.0)
+                  : 0.0;
+          final source = progress.sourceIndex > 0 ? '已切换备用源 · ' : '';
+          final speed =
+              progress.bytesPerSecond >= 1024 * 1024
+                  ? '${(progress.bytesPerSecond / (1024 * 1024)).toStringAsFixed(1)} MB/s'
+                  : '${(progress.bytesPerSecond / 1024).toStringAsFixed(0)} KB/s';
+          state = AppUpdateState(
+            status: AppUpdateStatus.downloading,
+            installedVersion: state.installedVersion,
+            release: release,
+            progress: fraction,
+            message:
+                fraction >= 1
+                    ? '下载完成，正在校验安装包…'
+                    : '${source}正在下载 ${(fraction * 100).round()}% · $speed',
           );
+        });
+        _downloadedApk = apk;
+        _downloadedChecksum = release.sha256;
+      }
+      if (!mounted || _cancelRequested) return;
+      // 授权失败时保留私有目录中的已校验文件，重试安装无需再下载。
+      state = AppUpdateState(
+        status: AppUpdateStatus.installing,
+        installedVersion: state.installedVersion,
+        release: release,
+        progress: 1,
+        message: '正在打开系统安装页…',
+      );
+      final opened = await _installer.install(_downloadedApk!);
+      if (!mounted || _cancelRequested) return;
+      state = AppUpdateState(
+        status: opened ? AppUpdateStatus.installing : AppUpdateStatus.failed,
+        installedVersion: state.installedVersion,
+        release: release,
+        progress: 1,
+        message:
+            opened ? '安装包校验通过，请在系统页面确认安装' : '请允许 Hormone 安装未知来源应用，返回后点“重试安装”',
+      );
+    } on UpdateDownloadCanceled {
+      // cancelDownload 统一在下载退出后恢复状态。
     } catch (error) {
-      _setFailure('无法开始下载：${_readableError(error)}');
+      if (mounted && !_cancelRequested) _setFailure(_readableError(error));
     }
   }
+
+  bool get hasDownloadedApk =>
+      _downloadedApk != null && _downloadedChecksum == state.release?.sha256;
 
   Future<void> cancelDownload() async {
     if (state.status != AppUpdateStatus.downloading) return;
-    await _activeOtaUpdate?.cancel();
-  }
-
-  void _handleOtaEvent(OtaEvent event) {
-    final release = state.release;
-    if (release == null) return;
-
-    switch (event.status) {
-      case OtaStatus.DOWNLOADING:
-        final percentage = double.tryParse(event.value ?? '') ?? 0;
-        state = AppUpdateState(
-          status: AppUpdateStatus.downloading,
-          installedVersion: state.installedVersion,
-          release: release,
-          progress: (percentage / 100).clamp(0, 1),
-          message: '正在下载 ${percentage.round()}%',
-        );
-      case OtaStatus.INSTALLING:
-        state = AppUpdateState(
-          status: AppUpdateStatus.installing,
-          installedVersion: state.installedVersion,
-          release: release,
-          progress: 1,
-          message: '安装包校验通过，请在系统页面确认安装',
-        );
-      case OtaStatus.INSTALLATION_DONE:
-        state = AppUpdateState(
-          status: AppUpdateStatus.installing,
-          installedVersion: state.installedVersion,
-          release: release,
-          progress: 1,
-          message: '新版本安装完成',
-        );
-      case OtaStatus.CANCELED:
-        state = AppUpdateState(
-          status: AppUpdateStatus.updateAvailable,
-          installedVersion: state.installedVersion,
-          release: release,
-          message: '已取消下载',
-        );
-      case OtaStatus.PERMISSION_NOT_GRANTED_ERROR:
-        _setFailure('未获得安装应用权限，请允许 Hormone 安装未知来源应用后重试');
-      case OtaStatus.CHECKSUM_ERROR:
-        _setFailure('安装包完整性校验失败，已停止安装，请重新下载');
-      case OtaStatus.DOWNLOAD_ERROR:
-        _setFailure('安装包下载失败，请检查网络后重试');
-      case OtaStatus.ALREADY_RUNNING_ERROR:
-        _setFailure('更新任务未能继续，请关闭其他更新任务后重试');
-      case OtaStatus.INSTALLATION_ERROR:
-        _setFailure('更新任务未能继续，请关闭其他更新任务后重试');
-      case OtaStatus.INTERNAL_ERROR:
-        _setFailure(
-          event.value?.isNotEmpty == true ? event.value! : '更新时发生未知错误',
-        );
-    }
+    _cancelRequested = true;
+    _downloader.cancel();
+    await _downloadJob;
+    if (!mounted) return;
+    state = AppUpdateState(
+      status: AppUpdateStatus.updateAvailable,
+      installedVersion: state.installedVersion,
+      release: state.release,
+      message: '已取消下载',
+    );
   }
 
   void _setFailure(String message) {
@@ -228,6 +237,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
   }
 
   String _readableError(Object error) {
+    if (error is UpdateDownloadException) return error.message;
     if (error is UpdateCheckException) return error.message;
     if (error is TimeoutException) return '连接超时，请检查网络后重试';
     if (error is http.ClientException) return '无法连接 GitHub，请检查网络后重试';
@@ -236,7 +246,8 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
 
   @override
   void dispose() {
-    _subscription?.cancel();
+    _cancelRequested = true;
+    _downloader.cancel();
     super.dispose();
   }
 }

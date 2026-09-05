@@ -122,6 +122,11 @@ flutter build appbundle --release
 - APK：`build/app/outputs/flutter-apk/app-release.apk`
 - AAB：`build/app/outputs/bundle/release/app-release.aab`
 
+以上是直接运行单次 Flutter 构建命令的输出。本地签名脚本和 CI 会构建通用包、
+三种分架构 APK 及 AAB，并将最终文件放在 `build/release/`。发布时使用该目录，
+不要使用会被后续架构构建覆盖的 `app-release.apk`。打包规则、校验清单和可选
+镜像上传配置见 [更新加速接入说明](../UPDATE_SETUP.md)。本地发布脚本需 Python 3.11+。
+
 发布前核对 APK 包内版本和签名：
 
 ```bash
@@ -166,12 +171,13 @@ version: major.minor.patch+buildNumber
 5. `.github/workflows/release.yml` 会用固定密钥构建 APK/AAB，生成 APK 的
    `.sha256` 文件，并自动创建 GitHub Release；如存在
    `version/<版本>/更新日志.md`，会直接作为 Release 说明。
-6. 确认 GitHub Release 中同时存在 APK、AAB、APK.sha256 三个资产。
+6. 确认 GitHub Release 中存在通用 APK、三种分架构 APK、各自的 `.sha256`、AAB 和 `latest.json`。
 
 若构建因发布工作流问题失败，在 `main`/`develop` 修复工作流后，可在 Actions →
 Release Build → Run workflow 中选择 `main`，输入已存在的标签（如 `v1.2.3`）重试。
-手动入口使用修复后的工作流、检出指定标签的应用源码，并校验标签与版本号一致；
-不需要移动、删除或重建已推送的版本标签。
+手动入口使用所选分支的工作流、检出指定标签的应用源码，并校验标签与版本号一致。
+标签必须包含该工作流引用的原生模板和发布脚本；优化前的旧标签应使用与其配套的
+旧版工作流重新构建，不要移动、删除或重建已推送的版本标签。
 
 App 通过 GitHub 的 `releases/latest` 接口检查最新正式版本。请勿只上传 Actions
 Artifact，也不要把常规版本标记为 draft/prerelease，否则客户端不会发现它。

@@ -21,6 +21,7 @@ flutter pub get
 |---|---|
 | `native_templates/android/app/build.gradle.kts` | `android/app/build.gradle.kts` |
 | `native_templates/android/app/src/main/AndroidManifest.xml` | `android/app/src/main/AndroidManifest.xml` |
+| `native_templates/android/app/src/main/kotlin/com/aetikyue/hormone/MainActivity.kt` | `android/app/src/main/kotlin/com/aetikyue/hormone/MainActivity.kt` |
 | `native_templates/android/app/src/main/java/com/aetikyue/hormone/CourseWidgetProvider.kt` | `android/app/src/main/java/com/aetikyue/hormone/CourseWidgetProvider.kt` |
 | `native_templates/android/app/src/main/res/xml/course_widget_info.xml` | `android/app/src/main/res/xml/course_widget_info.xml` |
 | `native_templates/android/app/src/main/res/layout/course_widget.xml` | `android/app/src/main/res/layout/course_widget.xml` |
@@ -35,7 +36,7 @@ Copy-Item native_templates/android/app/build.gradle.kts android/app/build.gradle
 Copy-Item native_templates/android/app/src/main/* android/app/src/main/ -Recurse -Force
 ```
 
-Gradle 模板包含 API 24 最低版本、更新插件需要的 desugaring 版本和固定签名配置。
+Gradle 模板包含 API 24 最低版本、通知等依赖所需的 desugaring 版本、架构过滤和固定签名配置。
 若旧的本地工程仍有 `android/app/build.gradle`，请先备份并合并其中的自定义配置，
 最终只保留一种 app 模块构建脚本，避免 Groovy 文件优先于 Kotlin 模板。
 

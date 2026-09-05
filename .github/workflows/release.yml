@@ -13,10 +13,12 @@ on:
 
 env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  HORMONE_UPDATE_BASE_URL: ${{ vars.HORMONE_UPDATE_BASE_URL }}
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
-  cancel-in-progress: true
+  # Serialize publication so two tags cannot race to overwrite latest.json.
+  group: hormone-android-release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -26,7 +28,7 @@ jobs:
   build-android:
     name: Build Android Release
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,6 +77,9 @@ jobs:
             android/app/src/main/res/layout/course_widget.xml
           cp native_templates/android/app/src/main/res/xml/course_widget_info.xml \
             android/app/src/main/res/xml/course_widget_info.xml
+          mkdir -p android/app/src/main/kotlin/com/aetikyue/hormone
+          cp native_templates/android/app/src/main/kotlin/com/aetikyue/hormone/MainActivity.kt \
+            android/app/src/main/kotlin/com/aetikyue/hormone/MainActivity.kt
           cp native_templates/android/app/src/main/res/xml/filepaths.xml \
             android/app/src/main/res/xml/filepaths.xml
 
@@ -114,33 +119,44 @@ jobs:
       - name: Generate splash screen
         run: dart run flutter_native_splash:create
 
-      - name: Build APK
-        run: flutter build apk --release
-
-      - name: Verify APK signing continuity
-        run: |
-          set -euo pipefail
-          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk \
-            | tee "$RUNNER_TEMP/hormone-apk-signature.txt"
-          grep -Fq 'Number of signers: 1' "$RUNNER_TEMP/hormone-apk-signature.txt"
-          # New build-tools use "V2 Signer" instead of "Signer #1".
-          grep -Fq 'certificate SHA-256 digest: 7206848b62105dcc9ea3e62a7a2f11158f14b6705849e10441dcf68fae52a6f6' \
-            "$RUNNER_TEMP/hormone-apk-signature.txt"
-
-      - name: Build App Bundle
-        run: flutter build appbundle --release
-
-      - name: Prepare signed release assets
+      - name: Build universal and per-architecture APKs
         run: |
           set -euo pipefail
           mkdir -p build/release
-          APK_NAME="hormone-${RELEASE_TAG}-android.apk"
-          AAB_NAME="hormone-${RELEASE_TAG}-android.aab"
-          cp build/app/outputs/flutter-apk/app-release.apk "build/release/$APK_NAME"
-          cp build/app/outputs/bundle/release/app-release.aab "build/release/$AAB_NAME"
-          cd build/release
-          sha256sum "$APK_NAME" > "$APK_NAME.sha256"
+          flutter build apk --release --dart-define="HORMONE_UPDATE_BASE_URL=$HORMONE_UPDATE_BASE_URL"
+          cp build/app/outputs/flutter-apk/app-release.apk "build/release/hormone-${RELEASE_TAG}-android.apk"
+          # Build each target without --split-per-abi: Flutter otherwise adds ABI-specific
+          # versionCode offsets, preventing a later upgrade back to a universal APK.
+          for pair in android-arm64:arm64-v8a android-arm:armeabi-v7a android-x64:x86_64; do
+            flutter build apk --release --target-platform="${pair%%:*}" \
+              --dart-define="HORMONE_UPDATE_BASE_URL=$HORMONE_UPDATE_BASE_URL"
+            cp build/app/outputs/flutter-apk/app-release.apk "build/release/hormone-${RELEASE_TAG}-${pair#*:}.apk"
+          done
+
+      - name: Verify APK signing and version continuity
+        run: |
+          set -euo pipefail
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
+          APP_VERSION=$(awk '/^version:/ {print $2}' pubspec.yaml)
+          for APK in build/release/*.apk; do
+            "$APKSIGNER" verify --verbose --print-certs "$APK" | tee "$RUNNER_TEMP/hormone-apk-signature.txt"
+            grep -Fq 'Number of signers: 1' "$RUNNER_TEMP/hormone-apk-signature.txt"
+            grep -Fq 'certificate SHA-256 digest: 7206848b62105dcc9ea3e62a7a2f11158f14b6705849e10441dcf68fae52a6f6' \
+              "$RUNNER_TEMP/hormone-apk-signature.txt"
+            "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/hormone-apk-badging.txt"
+            grep -Fq "versionCode='${APP_VERSION##*+}'" "$RUNNER_TEMP/hormone-apk-badging.txt"
+          done
+
+      - name: Build App Bundle
+        run: |
+          flutter build appbundle --release --dart-define="HORMONE_UPDATE_BASE_URL=$HORMONE_UPDATE_BASE_URL"
+          cp build/app/outputs/bundle/release/app-release.aab "build/release/hormone-${RELEASE_TAG}-android.aab"
+
+      - name: Prepare checksums and update manifest
+        run: |
+          python3 scripts/verify_apk_architectures.py --tag "$RELEASE_TAG"
+          python3 scripts/prepare_update_manifest.py --tag "$RELEASE_TAG"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -156,17 +172,43 @@ jobs:
           set -euo pipefail
           TAG="$RELEASE_TAG"
           VERSION="${TAG#v}"
-          APK="build/release/hormone-${TAG}-android.apk"
-          AAB="build/release/hormone-${TAG}-android.aab"
-          CHECKSUM="${APK}.sha256"
           NOTES="version/${VERSION}/更新日志.md"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" "$AAB" "$CHECKSUM" --clobber
+            gh release upload "$TAG" build/release/* --clobber
           elif [ -f "$NOTES" ]; then
-            gh release create "$TAG" "$APK" "$AAB" "$CHECKSUM" \
+            gh release create "$TAG" build/release/* \
               --title "Hormone $TAG" --notes-file "$NOTES"
           else
-            gh release create "$TAG" "$APK" "$AAB" "$CHECKSUM" \
+            gh release create "$TAG" build/release/* \
               --title "Hormone $TAG" --generate-notes
+          fi
+
+      # Optional: enable only after configuring your own HTTPS download source.
+      - name: Publish update mirror
+        if: env.HORMONE_UPDATE_BASE_URL != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_S3_URI: ${{ vars.HORMONE_UPDATE_S3_URI }}
+          UPDATE_S3_ENDPOINT: ${{ vars.HORMONE_UPDATE_S3_ENDPOINT }}
+          AWS_DEFAULT_REGION: ${{ vars.HORMONE_UPDATE_S3_REGION || 'us-east-1' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.HORMONE_UPDATE_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.HORMONE_UPDATE_S3_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          : "${UPDATE_S3_URI:?Configure HORMONE_UPDATE_S3_URI before enabling the mirror}"
+          : "${AWS_ACCESS_KEY_ID:?Missing mirror access key}"
+          : "${AWS_SECRET_ACCESS_KEY:?Missing mirror secret key}"
+          ENDPOINT_ARGS=()
+          if [ -n "$UPDATE_S3_ENDPOINT" ]; then
+            ENDPOINT_ARGS=(--endpoint-url "$UPDATE_S3_ENDPOINT")
+          fi
+          # Upload all immutable version files first; only then advertise the version.
+          aws "${ENDPOINT_ARGS[@]}" s3 cp build/release/ "${UPDATE_S3_URI%/}/${RELEASE_TAG}/" \
+            --recursive --exclude '*.aab' --exclude latest.json --cache-control 'public,max-age=31536000,immutable'
+          # Rebuilding an older tag must not replace the current update pointer.
+          LATEST_TAG=$(gh api repos/Aetik-yue/hormone/releases/latest --jq .tag_name)
+          if [ "$LATEST_TAG" = "$RELEASE_TAG" ]; then
+            aws "${ENDPOINT_ARGS[@]}" s3 cp build/release/latest.json "${UPDATE_S3_URI%/}/latest.json" \
+              --content-type 'application/json; charset=utf-8' --cache-control 'no-cache,max-age=0'
           fi

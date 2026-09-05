@@ -47,11 +47,26 @@ android {
         applicationId = "com.aetikyue.hormone"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // ota_update 7.x 要求 API 23+；当前 Flutter stable 的实际构建基线为 API 24。
+        // 当前 Flutter stable 的实际构建基线为 API 24。
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // --target-platform 只控制 Flutter 代码；同步过滤依赖的原生库，
+        // 避免 APK 被 Android 误识别为还支持缺少 Flutter 引擎的其他 ABI。
+        val targetAbis = (providers.gradleProperty("target-platform").orNull
+            ?: "android-arm,android-arm64,android-x64").split(',').map { target ->
+            when (target) {
+                "android-arm" -> "armeabi-v7a"
+                "android-arm64" -> "arm64-v8a"
+                "android-x64" -> "x86_64"
+                else -> throw GradleException("Unsupported Android target: $target")
+            }
+        }
+        ndk {
+            abiFilters.clear()
+            abiFilters.addAll(targetAbis)
+        }
     }
 
     signingConfigs {
@@ -86,6 +101,6 @@ flutter {
 }
 
 dependencies {
-    // ota_update 7.x 的 AAR metadata 要求 2.1.4+。
+    // 为通知等依赖提供 Java API 反糖。
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

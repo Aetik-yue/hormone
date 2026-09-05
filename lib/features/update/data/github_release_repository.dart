@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ffi';
 
 import 'package:http/http.dart' as http;
 
@@ -20,21 +21,42 @@ class UpdateCheckException implements Exception {
 /// 从公开 GitHub Release 获取最新 Android APK 与其 SHA-256。
 class GitHubReleaseRepository {
   final http.Client _client;
+  final String? _abi;
+  final Uri? _mirrorBase;
 
-  GitHubReleaseRepository({http.Client? client})
-    : _client = client ?? http.Client();
+  GitHubReleaseRepository({
+    http.Client? client,
+    String? abi,
+    String updateBaseUrl = const String.fromEnvironment(
+      'HORMONE_UPDATE_BASE_URL',
+    ),
+  }) : _client = client ?? http.Client(),
+       _abi = abi ?? _currentAbi(),
+       _mirrorBase = _parseMirrorBase(updateBaseUrl);
 
   Future<AppRelease> fetchLatestRelease() async {
+    final mirror = _mirrorBase;
+    if (mirror != null) {
+      try {
+        return await _fetchRelease(mirror.resolve('latest.json'), mirror: true);
+      } on Exception {
+        // 镜像未配置完成、离线或清单损坏时仍能从 GitHub 更新。
+      }
+    }
+    return _fetchRelease(Uri.parse(_latestReleaseUrl));
+  }
+
+  Future<AppRelease> _fetchRelease(Uri url, {bool mirror = false}) async {
     final response = await _client
         .get(
-          Uri.parse(_latestReleaseUrl),
+          url,
           headers: const {
             'Accept': 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28',
             'User-Agent': 'Hormone-Android-Updater',
           },
         )
-        .timeout(const Duration(seconds: 15));
+        .timeout(Duration(seconds: mirror ? 5 : 15));
 
     if (response.statusCode == 404) {
       throw const UpdateCheckException('暂时还没有可用的正式版本');
@@ -52,13 +74,22 @@ class GitHubReleaseRepository {
     if (decoded is! Map<String, dynamic>) {
       throw const UpdateCheckException('版本信息格式不正确');
     }
+    if (decoded['draft'] == true || decoded['prerelease'] == true) {
+      throw const UpdateCheckException('更新源未提供正式版本');
+    }
 
     final tagName = _requiredString(decoded, 'tag_name');
     final pageUrl = _httpsUri(_requiredString(decoded, 'html_url'));
     final assets = _assets(decoded['assets']);
-    final apk = _selectApk(assets);
-    final checksumAsset = _selectChecksum(assets, apk.name);
-    final checksum = await _fetchChecksum(checksumAsset.url, apk.name);
+    final apk = _selectApk(assets, _abi, tagName);
+    final checksum =
+        apk.sha256 ??
+        await _fetchChecksum(_selectChecksum(assets, apk.name).url, apk.name);
+    final downloadUrl =
+        _mirrorBase?.resolve(
+          '${Uri.encodeComponent(tagName)}/${Uri.encodeComponent(apk.name)}',
+        ) ??
+        apk.url;
 
     try {
       return AppRelease(
@@ -67,7 +98,8 @@ class GitHubReleaseRepository {
         releaseName: _optionalString(decoded['name']) ?? tagName,
         notes: _optionalString(decoded['body'])?.trim() ?? '',
         pageUrl: pageUrl,
-        apkUrl: apk.url,
+        apkUrl: downloadUrl,
+        fallbackUrls: downloadUrl == apk.url ? const [] : [apk.url],
         apkFileName: apk.name,
         apkSize: apk.size,
         sha256: checksum,
@@ -112,11 +144,13 @@ class _ReleaseAsset {
   final String name;
   final Uri url;
   final int size;
+  final String? sha256;
 
   const _ReleaseAsset({
     required this.name,
     required this.url,
     required this.size,
+    this.sha256,
   });
 }
 
@@ -132,12 +166,13 @@ List<_ReleaseAsset> _assets(Object? value) {
           name: name,
           url: _httpsUri(_requiredString(asset, 'browser_download_url')),
           size: asset['size'] is int ? asset['size'] as int : 0,
+          sha256: _digest(asset['digest']),
         );
       })
       .toList(growable: false);
 }
 
-_ReleaseAsset _selectApk(List<_ReleaseAsset> assets) {
+_ReleaseAsset _selectApk(List<_ReleaseAsset> assets, String? abi, String tag) {
   final candidates =
       assets
           .where(
@@ -150,12 +185,54 @@ _ReleaseAsset _selectApk(List<_ReleaseAsset> assets) {
   if (candidates.isEmpty) {
     throw const UpdateCheckException('最新版本中没有 Android APK');
   }
-  candidates.sort((a, b) {
+  // 分架构包使用固定名称，不含 android，兼容旧版的通用包优先规则。
+  if (abi != null) {
+    for (final candidate in candidates) {
+      if (candidate.name == 'hormone-$tag-$abi.apk') return candidate;
+    }
+  }
+  final universal =
+      candidates
+          .where(
+            (asset) =>
+                asset.name == 'hormone-$tag-android.apk' ||
+                asset.name == 'app-release.apk' ||
+                asset.name == 'app.apk' ||
+                asset.name == 'fallback.apk',
+          )
+          .toList();
+  if (universal.isEmpty) {
+    throw const UpdateCheckException('最新版本中没有适合当前设备的安装包');
+  }
+  universal.sort((a, b) {
     final aPreferred = a.name.toLowerCase().contains('android') ? 0 : 1;
     final bPreferred = b.name.toLowerCase().contains('android') ? 0 : 1;
     return aPreferred.compareTo(bPreferred);
   });
-  return candidates.first;
+  return universal.first;
+}
+
+String? _currentAbi() => switch (Abi.current()) {
+  Abi.androidArm64 => 'arm64-v8a',
+  Abi.androidArm => 'armeabi-v7a',
+  Abi.androidX64 => 'x86_64',
+  _ => null,
+};
+
+String? _digest(Object? value) {
+  if (value is! String) return null;
+  return RegExp(
+    r'^sha256:([a-fA-F0-9]{64})$',
+  ).firstMatch(value)?.group(1)?.toLowerCase();
+}
+
+Uri? _parseMirrorBase(String value) {
+  if (value.trim().isEmpty) return null;
+  final uri = _httpsUri(value.trim());
+  if (uri.hasQuery || uri.hasFragment || uri.userInfo.isNotEmpty) {
+    throw const UpdateCheckException('更新源必须是无查询参数的 HTTPS 目录地址');
+  }
+  return uri.replace(path: uri.path.endsWith('/') ? uri.path : '${uri.path}/');
 }
 
 _ReleaseAsset _selectChecksum(List<_ReleaseAsset> assets, String apkName) {

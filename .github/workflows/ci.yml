@@ -39,3 +39,6 @@ jobs:
 
       - name: Run tests
         run: flutter test
+
+      - name: Test update manifest generation
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'

@@ -3,8 +3,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 应用内下载 APK 后调起系统安装器；普通应用仍必须由用户确认安装。 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- ota_update 兼容系统应用时声明了以下权限；本项目只使用普通交互式安装且
-         APK 保存在应用私有目录，因此在 Manifest 合并时明确移除。 -->
+    <!-- 仅使用普通交互式安装和应用私有目录，合并时移除不需要的权限。 -->
     <uses-permission
         android:name="android.permission.INSTALL_PACKAGES"
         tools:node="remove" />
@@ -46,10 +45,10 @@
                 android:resource="@xml/course_widget_info" />
         </receiver>
 
-        <!-- ota_update 使用应用私有目录保存 APK，再通过 content URI 交给系统安装器。 -->
+        <!-- 仅将校验后的私有缓存安装包通过 content URI 交给系统安装器。 -->
         <provider
-            android:name="sk.fourq.otaupdate.OtaUpdateFileProvider"
-            android:authorities="${applicationId}.ota_update_provider"
+            android:name=".UpdateFileProvider"
+            android:authorities="${applicationId}.update_provider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

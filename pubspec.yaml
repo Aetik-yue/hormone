@@ -26,7 +26,7 @@ dependencies:
   package_info_plus: ^9.0.1
   http: ^1.6.0
   pub_semver: ^2.2.1
-  ota_update: ^7.1.0
+  crypto: ^3.0.7
   share_plus: ^10.0.0
   flutter_local_notifications: ^17.2.0
   timezone: ^0.9.4

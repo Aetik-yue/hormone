@@ -26,7 +26,7 @@
 - **按习惯设置提醒与外观**：课前 5 / 10 / 15 / 30 分钟提醒，自定义节次时间，切换浅色、深色或跟随系统主题。
 - **备份与恢复数据**：将全部学期和课程导出为 JSON，通过系统分享面板保存；支持从备份完整恢复。
 - **在桌面查看今日课程**：提供 Android 桌面小组件，课表变化后同步刷新。
-- **在应用内检查更新**：自动或手动检查 GitHub 正式版本，查看更新说明，下载并校验 APK 后进入系统安装页面。
+- **在应用内检查更新**：自动或手动检查正式版本，按设备架构下载较小的 APK，显示下载速度，校验后进入系统安装页面；支持配置自有下载源并在失败时回退 GitHub。
 
 ## 下载与开始使用
 
@@ -174,7 +174,7 @@ dart run flutter_native_splash:create
 | 路由 | go_router |
 | 教务导入 | webview_flutter、学校适配器与 JavaScript 提取脚本 |
 | 系统集成 | flutter_local_notifications、home_widget、share_plus |
-| 应用更新 | GitHub Releases、ota_update |
+| 应用更新 | GitHub Releases / 自有镜像、HTTP 流式下载、SHA-256、Android 系统安装器 |
 
 ```text
 lib/
@@ -191,7 +191,7 @@ lib/
     ├── settings/        # 外观、节次时间、备份与恢复
     ├── update/          # 版本检查与应用内更新
     └── widget/          # 桌面小组件数据桥接
-native_templates/        # Android 原生配置与小组件模板
+native_templates/        # Android 原生配置、小组件与更新安装入口模板
 test/                    # 领域逻辑、数据层与界面测试
 scripts/                 # 本地签名构建脚本
 docs/                    # 设计文档、截图与发布指南
@@ -228,6 +228,8 @@ flutter build appbundle --release
 [CI](.github/workflows/ci.yml) 会在推送或提交 PR 到 `main`、`develop`、`master` 时执行依赖安装、代码生成、分析和测试。推送 `v*` 标签会触发 [Release Build](.github/workflows/release.yml)，重建 Android 工程、注入原生模板与签名，生成 APK、AAB 和 SHA-256 校验文件，再发布 GitHub Release。
 
 签名配置、Windows 本地构建脚本、版本同步和发布失败重试步骤统一维护在 [Android 发布指南](docs/RELEASE.md)。
+
+分架构 APK、下载源配置和镜像发布步骤见 [更新加速接入说明](UPDATE_SETUP.md)。
 
 ## 反馈与参与
 
