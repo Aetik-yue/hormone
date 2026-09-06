@@ -3,29 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:hormone/core/constants/app_constants.dart';
+import '../domain/section_time.dart';
+import '../domain/section_time_shift.dart';
 
-/// 单节课的时间配置：开始时间 + 时长（分钟）。
-class SectionTime {
-  final String startTime; // "HH:mm"
-  final int durationMinutes;
-
-  const SectionTime(this.startTime, this.durationMinutes);
-
-  /// 计算结束时间字符串。溢出 24h 时取模。
-  String get endTime {
-    final parts = startTime.split(':');
-    if (parts.length != 2) return '';
-    final h = int.tryParse(parts[0]);
-    final m = int.tryParse(parts[1]);
-    if (h == null || m == null) return '';
-    var total = (h * 60 + m + durationMinutes) % (24 * 60);
-    if (total < 0) total += 24 * 60;
-    return '${(total ~/ 60).toString().padLeft(2, '0')}:${(total % 60).toString().padLeft(2, '0')}';
-  }
-
-  /// 完整时间范围显示，如 "08:00-08:45"。
-  String get timeRange => '$startTime-$endTime';
-}
+// 保持现有调用方的模型导入路径兼容。
+export '../domain/section_time.dart';
 
 /// 节次时间预设模板。
 class SectionTimeTemplate {
@@ -94,24 +76,25 @@ const List<SectionTimeTemplate> sectionTimeTemplates = [
 /// 持久化到 SharedPreferences，未自定义时使用默认值。
 final sectionTimesProvider =
     StateNotifierProvider<SectionTimesNotifier, Map<int, SectionTime>>((ref) {
-  return SectionTimesNotifier();
-});
+      return SectionTimesNotifier();
+    });
 
 class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
   static const _prefKey = 'custom_section_times_v2';
   static const _oldPrefKey = 'custom_section_times';
+  late final Future<void> _ready;
 
   SectionTimesNotifier() : super(_defaultMap()) {
-    _init();
+    _ready = _init();
   }
 
   static Map<int, SectionTime> _defaultMap() => {
-        for (var i = 1; i <= AppConstants.maxSections; i++)
-          i: SectionTime(
-            AppConstants.sectionStartTimes[i] ?? '',
-            AppConstants.defaultSectionDuration,
-          ),
-      };
+    for (var i = 1; i <= AppConstants.maxSections; i++)
+      i: SectionTime(
+        AppConstants.sectionStartTimes[i] ?? '',
+        AppConstants.defaultSectionDuration,
+      ),
+  };
 
   /// 把任意历史长度的配置补齐到当前节次上限，升级时保留用户已有设置。
   static Map<int, SectionTime> _normalizedMap(List<String> stored) {
@@ -120,9 +103,10 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
     for (var i = 0; i < count; i++) {
       final parts = stored[i].split(',');
       final start = parts.first;
-      final duration = parts.length == 2
-          ? int.tryParse(parts[1]) ?? AppConstants.defaultSectionDuration
-          : AppConstants.defaultSectionDuration;
+      final duration =
+          parts.length == 2
+              ? int.tryParse(parts[1]) ?? AppConstants.defaultSectionDuration
+              : AppConstants.defaultSectionDuration;
       map[i + 1] = SectionTime(start, duration);
     }
     return map;
@@ -165,11 +149,21 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
   /// 更新某一节的开始时间。
   Future<void> setSectionStart(int section, String time) async {
     final updated = Map<int, SectionTime>.from(state);
-    final current = updated[section] ??
+    final current =
+        updated[section] ??
         SectionTime(time, AppConstants.defaultSectionDuration);
     updated[section] = SectionTime(time, current.durationMinutes);
     state = updated;
     await _persist(updated);
+  }
+
+  /// 修改第一节开始时间，并一次性保存全部已设置节次的平移结果。
+  Future<void> shiftFromFirstStart(String time) async {
+    // 等待历史配置读取完成，确保按用户保存的间隔顺延。
+    await _ready;
+    final updated = shiftSectionTimes(state, time);
+    await _persist(updated);
+    if (mounted) state = updated;
   }
 
   /// 更新某一节的时长。
@@ -211,13 +205,10 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
 
   Future<void> _persist(Map<int, SectionTime> times) async {
     final prefs = await SharedPreferences.getInstance();
-    final list = List.generate(
-      AppConstants.maxSections,
-      (i) {
-        final t = times[i + 1];
-        return t != null ? '${t.startTime},${t.durationMinutes}' : '';
-      },
-    );
+    final list = List.generate(AppConstants.maxSections, (i) {
+      final t = times[i + 1];
+      return t != null ? '${t.startTime},${t.durationMinutes}' : '';
+    });
     await prefs.setStringList(_prefKey, list);
   }
 }

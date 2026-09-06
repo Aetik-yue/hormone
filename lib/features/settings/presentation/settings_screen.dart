@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:hormone/core/constants/app_constants.dart';
 import 'package:hormone/data/providers/database_providers.dart';
 import 'package:hormone/data/repositories/backup_repository.dart';
 import 'package:hormone/features/notification/application/notification_service.dart';
@@ -14,7 +13,7 @@ import 'package:hormone/features/semester/application/semester_providers.dart';
 import 'package:hormone/features/update/application/app_update_controller.dart';
 import 'package:hormone/features/update/presentation/update_dialog.dart';
 import '../application/theme_mode_provider.dart';
-import '../application/section_times_provider.dart';
+import 'section_time_editor.dart';
 import '../application/export_service.dart';
 
 /// 项目 GitHub 仓库地址（支持我们）。
@@ -69,7 +68,7 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.schedule_outlined),
             title: const Text('自定义节次时间'),
-            subtitle: const Text('设置每节课的开始时间'),
+            subtitle: const Text('调整第一节时间，后续节次同步顺延'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showSectionTimeEditor(context, ref),
           ),
@@ -286,7 +285,7 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => const _SectionTimeEditor(),
+      builder: (_) => const SectionTimeEditor(),
     );
   }
 
@@ -477,208 +476,6 @@ class _AppearanceCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// 可选的课时时长（分钟）。
-const _durationOptions = [30, 35, 40, 45, 50, 60, 90, 120];
-
-/// 节次时间编辑器（Bottom Sheet）。
-class _SectionTimeEditor extends ConsumerStatefulWidget {
-  const _SectionTimeEditor();
-
-  @override
-  ConsumerState<_SectionTimeEditor> createState() => _SectionTimeEditorState();
-}
-
-class _SectionTimeEditorState extends ConsumerState<_SectionTimeEditor> {
-  @override
-  Widget build(BuildContext context) {
-    final times = ref.watch(sectionTimesProvider);
-    final theme = Theme.of(context);
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.9,
-      expand: false,
-      builder: (context, scrollController) {
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Text('节次时间设置', style: theme.textTheme.titleMedium),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => _showTemplatePicker(context, ref),
-                    child: const Text('模板'),
-                  ),
-                  TextButton(
-                    onPressed:
-                        () =>
-                            ref
-                                .read(sectionTimesProvider.notifier)
-                                .resetToDefault(),
-                    child: const Text('恢复默认'),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: AppConstants.maxSections,
-                itemBuilder: (context, i) {
-                  final section = i + 1;
-                  final sectionTime = times[section];
-                  final startTime = sectionTime?.startTime ?? '';
-                  final duration =
-                      sectionTime?.durationMinutes ??
-                      AppConstants.defaultSectionDuration;
-                  final endTime = sectionTime?.endTime ?? '';
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 4,
-                    ),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 56,
-                          child: Text(
-                            '第 $section 节',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () => _pickTime(context, section, startTime),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: theme.dividerColor),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              startTime.isNotEmpty ? startTime : '未设置',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        DropdownButton<int>(
-                          value:
-                              _durationOptions.contains(duration)
-                                  ? duration
-                                  : null,
-                          items:
-                              _durationOptions
-                                  .map(
-                                    (d) => DropdownMenuItem(
-                                      value: d,
-                                      child: Text('$d 分'),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: (v) {
-                            if (v != null) {
-                              ref
-                                  .read(sectionTimesProvider.notifier)
-                                  .setSectionDuration(section, v);
-                            }
-                          },
-                        ),
-                        const Spacer(),
-                        Text(
-                          endTime.isNotEmpty ? '→ $endTime' : '',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _pickTime(
-    BuildContext context,
-    int section,
-    String current,
-  ) async {
-    final parts = current.split(':');
-    final initial =
-        parts.length == 2
-            ? TimeOfDay(
-              hour: int.tryParse(parts[0]) ?? 8,
-              minute: int.tryParse(parts[1]) ?? 0,
-            )
-            : const TimeOfDay(hour: 8, minute: 0);
-
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial,
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      final timeStr =
-          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-      ref.read(sectionTimesProvider.notifier).setSectionStart(section, timeStr);
-    }
-  }
-
-  void _showTemplatePicker(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  '选择节次模板',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-              const Divider(height: 1),
-              ...sectionTimeTemplates.map(
-                (template) => ListTile(
-                  title: Text(template.name),
-                  subtitle: Text('${template.duration} 分钟/节'),
-                  onTap: () {
-                    ref
-                        .read(sectionTimesProvider.notifier)
-                        .applyTemplate(template);
-                    Navigator.of(ctx).pop();
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }
