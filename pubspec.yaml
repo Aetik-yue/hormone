@@ -65,7 +65,7 @@ flutter_launcher_icons:
 # Splash screen generator (run after `flutter pub get`):
 #   dart run flutter_native_splash:create
 flutter_native_splash:
-  color: "#5B8DEF"
+  color: "#FFF4E7"
   image: "assets/splash/logo.png"
   android: true
   ios: false
@@ -74,4 +74,4 @@ flutter_native_splash:
   fullscreen: true
   android_12:
     image: "assets/splash/logo.png"
-    color: "#5B8DEF"
+    color: "#FFF4E7"
