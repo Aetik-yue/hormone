@@ -68,6 +68,7 @@ try {
     & $dart $flutterTools build appbundle --release --no-pub "--dart-define=HORMONE_UPDATE_BASE_URL=$UpdateBaseUrl"
     if ($LASTEXITCODE -ne 0) { throw 'Signed AAB build failed.' }
     Copy-Item -LiteralPath build/app/outputs/bundle/release/app-release.aab -Destination (Join-Path $releaseDirectory "hormone-v$version-android.aab") -Force
+    & (Join-Path $PSScriptRoot 'verify_signed_apks.ps1') -ReleaseDirectory $releaseDirectory
     python scripts/verify_apk_architectures.py --tag "v$version"
     if ($LASTEXITCODE -ne 0) { throw 'APK architecture verification failed.' }
     python scripts/prepare_update_manifest.py --tag "v$version"

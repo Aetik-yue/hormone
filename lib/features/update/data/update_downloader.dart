@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import '../domain/app_release.dart';
+import '../domain/slow_download_detector.dart';
 
 class UpdateDownloadCanceled implements Exception {}
 
@@ -34,6 +35,7 @@ class UpdateDownloadProgress {
 class UpdateDownloader {
   final http.Client Function() _clientFactory;
   final Future<Directory> Function() _directory;
+  final SlowDownloadDetector Function() _slowDownloadDetectorFactory;
   final Duration connectionTimeout;
   final Duration stallTimeout;
   http.Client? _activeClient;
@@ -42,10 +44,13 @@ class UpdateDownloader {
   UpdateDownloader({
     http.Client Function()? clientFactory,
     Future<Directory> Function()? directory,
+    SlowDownloadDetector Function()? slowDownloadDetectorFactory,
     this.connectionTimeout = const Duration(seconds: 15),
     this.stallTimeout = const Duration(seconds: 30),
   }) : _clientFactory = clientFactory ?? http.Client.new,
-       _directory = directory ?? getTemporaryDirectory;
+       _directory = directory ?? getTemporaryDirectory,
+       _slowDownloadDetectorFactory =
+           slowDownloadDetectorFactory ?? SlowDownloadDetector.new;
 
   void cancel() {
     _canceled = true;
@@ -94,14 +99,26 @@ class UpdateDownloader {
         var received = 0;
         var lastReport = 0;
         final stopwatch = Stopwatch()..start();
+        final slowDownload =
+            index + 1 < urls.length ? _slowDownloadDetectorFactory() : null;
         output = await partial.open(mode: FileMode.write);
-        await for (final bytes in response.stream.timeout(stallTimeout)) {
+        await for (final bytes in response.stream
+            .where((bytes) => bytes.isNotEmpty)
+            .timeout(stallTimeout)) {
           _checkCanceled();
           received += bytes.length;
           if (total > 0 && received > total) {
             throw const UpdateDownloadException('安装包大小与版本信息不符');
           }
           await output.writeFrom(bytes);
+          if (slowDownload?.shouldSwitch(
+                elapsed: stopwatch.elapsed,
+                received: received,
+                total: total,
+              ) ??
+              false) {
+            throw const UpdateDownloadException('当前下载源持续低速，正在尝试备用源');
+          }
           final elapsed = stopwatch.elapsedMilliseconds;
           if (elapsed - lastReport >= 250 || received == total) {
             onProgress(

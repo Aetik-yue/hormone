@@ -5,8 +5,10 @@
 - 未配置镜像时使用 GitHub Releases；优先读取接口内的 `digest`，缺少时兼容原有 `.sha256` 文件。
 - 根据 Dart VM 当前实际运行的 Android ABI 选择对应安装包；无法识别或该版本没有对应包时使用通用 APK。这样不会把其他架构的 APK 发给当前设备。
 - 配置镜像后，先请求镜像的 `latest.json`（5 秒超时），失败或清单无效时回退 GitHub API。
-- APK 优先从镜像下载，连接超时（15 秒）、连续 30 秒没有数据、HTTP 错误或完整性校验失败时尝试 GitHub 的同一文件。切换时重新下载，不跨源拼接部分文件。
-- 下载进度显示百分比和本次线路的平均速度。SHA-256 通过后才调用系统安装页；授权失败可复用已校验的缓存 APK。
+- APK 优先从镜像下载，连接超时（15 秒）、连续 30 秒没有实际字节、HTTP 错误或完整性校验失败时尝试 GitHub 的同一文件。切换时重新下载，不跨源拼接部分文件。
+- 有备用源时还会识别持续低速：先预热 10 秒，再按最近 10 秒的速度判断；连续 15 秒低于 32 KiB/s 时切换。已下载达到 80% 或剩余不超过 2 MiB 时保留当前进度，最后一个源不会因低速被中断。
+- 下载进度显示百分比和本次线路的平均速度。下载期间可明确取消，返回键或点击弹窗外部不会隐藏进度。
+- SHA-256 通过后才调用系统安装页；完成未知来源授权或取消系统安装后，都可点“重试安装”复用已校验的缓存 APK，无须重新下载。
 - APK 保存在应用私有缓存，取消和失败会清理部分文件。当前不支持跨进程断点续传。
 
 ## 构建与旧版本兼容
@@ -25,6 +27,8 @@
 构建脚本分别使用 `--target-platform`，不使用 `--split-per-abi`：Flutter 的后者会给不同架构增加 `versionCode` 偏移，导致未来回到通用包时可能被 Android 判为降级。Gradle 同时按目标架构过滤依赖中的原生库；CI 检查每份 APK 的签名、版本代码与实际架构。
 
 本地执行 `powershell -NoProfile -File scripts/build_signed_android.ps1`。脚本读取现有的本机签名配置，最终可分发文件在 `build/release/`，包括各 APK 的校验文件、AAB 和更新清单。构建依赖 Python 3.11+。`build/app/outputs/flutter-apk/app-release.apk` 会被各架构构建覆盖，**发布时使用 `build/release/` 中的文件**。
+
+本地签名构建还会自动检查四份 APK 的包名、版本号、版本代码和固定签名证书。也可单独运行 `scripts/verify_signed_apks.ps1`，不匹配时直接报错。
 
 原生安装入口保存在 `native_templates/android/app/src/main/kotlin/com/aetikyue/hormone/MainActivity.kt`。重建 Android 平台目录时，须连同 Manifest 与 `res/xml/filepaths.xml` 一并应用；发布流程和本地签名脚本均已包含这一步。
 

@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hormone/features/update/data/update_downloader.dart';
 import 'package:hormone/features/update/domain/app_release.dart';
+import 'package:hormone/features/update/domain/slow_download_detector.dart';
 import 'package:http/http.dart' as http;
 
 void main() {
@@ -103,6 +104,94 @@ void main() {
             return attempts == 1
                 ? Completer<http.StreamedResponse>().future
                 : Future.value(http.StreamedResponse(Stream.value(bytes), 200));
+          }),
+    );
+    expect(
+      await (await downloader.download(release, (_) {})).readAsBytes(),
+      bytes,
+    );
+    expect(attempts, 2);
+  });
+
+  test('持续有数据的低速源也会切换，切换前关闭旧连接', () async {
+    final clients = <_Client>[];
+    final downloader = UpdateDownloader(
+      directory: () async => directory,
+      slowDownloadDetectorFactory:
+          () => SlowDownloadDetector(
+            warmup: const Duration(milliseconds: 10),
+            window: const Duration(milliseconds: 10),
+            slowDuration: const Duration(milliseconds: 10),
+            sampleInterval: const Duration(milliseconds: 1),
+            minimumBytesPerSecond: 100000,
+            minimumRemainingBytes: 0,
+            completionThreshold: 1,
+          ),
+      clientFactory: () {
+        if (clients.isNotEmpty) expect(clients.last.closed, isTrue);
+        final isFirst = clients.isEmpty;
+        final client = _Client(
+          (_) async => http.StreamedResponse(
+            isFirst
+                ? Stream<List<int>>.periodic(
+                  const Duration(milliseconds: 10),
+                  (index) => [bytes[index]],
+                ).take(bytes.length)
+                : Stream.value(bytes),
+            200,
+          ),
+        );
+        clients.add(client);
+        return client;
+      },
+    );
+    final apk = await downloader.download(release, (_) {});
+    expect(await apk.readAsBytes(), bytes);
+    expect(clients, hasLength(2));
+  });
+
+  test('最后一条可用源不启用低速切换', () async {
+    var attempts = 0;
+    var detectors = 0;
+    final downloader = UpdateDownloader(
+      directory: () async => directory,
+      slowDownloadDetectorFactory: () {
+        detectors++;
+        return SlowDownloadDetector();
+      },
+      clientFactory:
+          () => _Client((_) async {
+            attempts++;
+            return attempts == 1
+                ? http.StreamedResponse(const Stream.empty(), 503)
+                : http.StreamedResponse(Stream.value(bytes), 200);
+          }),
+    );
+    expect(
+      await (await downloader.download(release, (_) {})).readAsBytes(),
+      bytes,
+    );
+    expect(attempts, 2);
+    expect(detectors, 0);
+  });
+
+  test('空数据事件不会延长断流等待', () async {
+    var attempts = 0;
+    final downloader = UpdateDownloader(
+      directory: () async => directory,
+      stallTimeout: const Duration(milliseconds: 20),
+      clientFactory:
+          () => _Client((_) async {
+            attempts++;
+            return http.StreamedResponse(
+              attempts == 1
+                  ? Stream<List<int>>.periodic(
+                    const Duration(milliseconds: 5),
+                    (_) => [],
+                  )
+                  : Stream.value(bytes),
+              200,
+            );
           }),
     );
     expect(

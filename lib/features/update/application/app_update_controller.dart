@@ -38,7 +38,8 @@ class AppUpdateState {
 
   bool get isBusy =>
       status == AppUpdateStatus.checking ||
-      status == AppUpdateStatus.downloading;
+      status == AppUpdateStatus.downloading ||
+      status == AppUpdateStatus.installing;
 }
 
 final githubReleaseRepositoryProvider = Provider<GitHubReleaseRepository>((
@@ -195,12 +196,15 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       final opened = await _installer.install(_downloadedApk!);
       if (!mounted || _cancelRequested) return;
       state = AppUpdateState(
-        status: opened ? AppUpdateStatus.installing : AppUpdateStatus.failed,
+        status:
+            opened ? AppUpdateStatus.updateAvailable : AppUpdateStatus.failed,
         installedVersion: state.installedVersion,
         release: release,
         progress: 1,
         message:
-            opened ? '安装包校验通过，请在系统页面确认安装' : '请允许 Hormone 安装未知来源应用，返回后点“重试安装”',
+            opened
+                ? '请在系统页面确认安装；如果取消或安装未完成，返回后可点“重试安装”'
+                : '请允许 Hormone 安装未知来源应用，返回后点“重试安装”',
       );
     } on UpdateDownloadCanceled {
       // cancelDownload 统一在下载退出后恢复状态。
