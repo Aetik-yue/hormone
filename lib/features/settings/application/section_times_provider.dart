@@ -82,10 +82,10 @@ final sectionTimesProvider =
 class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
   static const _prefKey = 'custom_section_times_v2';
   static const _oldPrefKey = 'custom_section_times';
-  late final Future<void> _ready;
+  late Future<void> _pendingChange;
 
   SectionTimesNotifier() : super(_defaultMap()) {
-    _ready = _init();
+    _pendingChange = _init();
   }
 
   static Map<int, SectionTime> _defaultMap() => {
@@ -123,7 +123,7 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
     final oldData = prefs.getStringList(_oldPrefKey);
     if (oldData != null && oldData.isNotEmpty) {
       final map = _normalizedMap(oldData);
-      state = map;
+      if (mounted) state = map;
       await _persist(map);
       await prefs.remove(_oldPrefKey);
     }
@@ -135,7 +135,7 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
     if (stored != null && stored.isNotEmpty) {
       try {
         final map = _normalizedMap(stored);
-        state = map;
+        if (mounted) state = map;
         if (stored.length != AppConstants.maxSections) {
           await _persist(map);
         }
@@ -147,60 +147,81 @@ class SectionTimesNotifier extends StateNotifier<Map<int, SectionTime>> {
   }
 
   /// 更新某一节的开始时间。
-  Future<void> setSectionStart(int section, String time) async {
-    final updated = Map<int, SectionTime>.from(state);
-    final current =
-        updated[section] ??
-        SectionTime(time, AppConstants.defaultSectionDuration);
-    updated[section] = SectionTime(time, current.durationMinutes);
-    state = updated;
-    await _persist(updated);
+  Future<void> setSectionStart(int section, String time) {
+    return _enqueueChange(() async {
+      final updated = Map<int, SectionTime>.from(state);
+      final current =
+          updated[section] ??
+          SectionTime(time, AppConstants.defaultSectionDuration);
+      updated[section] = SectionTime(time, current.durationMinutes);
+      await _persist(updated);
+      if (mounted) state = updated;
+    });
   }
 
   /// 修改第一节开始时间，并一次性保存全部已设置节次的平移结果。
-  Future<void> shiftFromFirstStart(String time) async {
-    // 等待历史配置读取完成，确保按用户保存的间隔顺延。
-    await _ready;
-    final updated = shiftSectionTimes(state, time);
-    await _persist(updated);
-    if (mounted) state = updated;
+  Future<void> shiftFromFirstStart(String time) {
+    return _enqueueChange(() async {
+      final updated = shiftSectionTimes(state, time);
+      await _persist(updated);
+      if (mounted) state = updated;
+    });
   }
 
   /// 更新某一节的时长。
-  Future<void> setSectionDuration(int section, int minutes) async {
-    final updated = Map<int, SectionTime>.from(state);
-    final current = updated[section] ?? SectionTime('', minutes);
-    updated[section] = SectionTime(current.startTime, minutes);
-    state = updated;
-    await _persist(updated);
+  Future<void> setSectionDuration(int section, int minutes) {
+    return _enqueueChange(() async {
+      final updated = Map<int, SectionTime>.from(state);
+      final current = updated[section] ?? SectionTime('', minutes);
+      updated[section] = SectionTime(current.startTime, minutes);
+      await _persist(updated);
+      if (mounted) state = updated;
+    });
   }
 
   /// 批量更新全部节次时间。
-  Future<void> setAllTimes(Map<int, SectionTime> times) async {
-    state = times;
-    await _persist(times);
+  Future<void> setAllTimes(Map<int, SectionTime> times) {
+    final updated = Map<int, SectionTime>.from(times);
+    return _enqueueChange(() async {
+      await _persist(updated);
+      if (mounted) state = updated;
+    });
   }
 
   /// 应用预设模板。
-  Future<void> applyTemplate(SectionTimeTemplate template) async {
-    final map = <int, SectionTime>{};
-    for (var i = 1; i <= AppConstants.maxSections; i++) {
-      final start = template.startTimes[i];
-      if (start != null) {
-        map[i] = SectionTime(start, template.duration);
-      } else {
-        map[i] = SectionTime('', template.duration);
+  Future<void> applyTemplate(SectionTimeTemplate template) {
+    return _enqueueChange(() async {
+      final map = <int, SectionTime>{};
+      for (var i = 1; i <= AppConstants.maxSections; i++) {
+        final start = template.startTimes[i];
+        if (start != null) {
+          map[i] = SectionTime(start, template.duration);
+        } else {
+          map[i] = SectionTime('', template.duration);
+        }
       }
-    }
-    state = map;
-    await _persist(map);
+      await _persist(map);
+      if (mounted) state = map;
+    });
   }
 
   /// 恢复默认时间表。
-  Future<void> resetToDefault() async {
-    state = _defaultMap();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefKey);
+  Future<void> resetToDefault() {
+    return _enqueueChange(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefKey);
+      if (mounted) state = _defaultMap();
+    });
+  }
+
+  /// 等待历史配置加载，并按调用顺序保存，避免慢写入覆盖后续编辑。
+  Future<void> _enqueueChange(Future<void> Function() change) {
+    final operation = _pendingChange.then((_) async {
+      if (mounted) await change();
+    });
+    // 错误仍由本次调用返回，但不能阻塞之后的合法修改。
+    _pendingChange = operation.catchError((Object _) {});
+    return operation;
   }
 
   Future<void> _persist(Map<int, SectionTime> times) async {

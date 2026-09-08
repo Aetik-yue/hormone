@@ -34,10 +34,13 @@ class _SectionTimeEditorState extends ConsumerState<SectionTimeEditor> {
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   Text('节次时间设置', style: theme.textTheme.titleMedium),
-                  const Spacer(),
                   TextButton(
                     onPressed: () => _showTemplatePicker(context, ref),
                     child: const Text('模板'),
@@ -82,10 +85,14 @@ class _SectionTimeEditorState extends ConsumerState<SectionTimeEditor> {
                       horizontal: 16,
                       vertical: 4,
                     ),
-                    child: Row(
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         SizedBox(
-                          width: 56,
+                          width: MediaQuery.textScalerOf(context).scale(56),
                           child: Text(
                             '第 $section 节',
                             style: theme.textTheme.bodyMedium,
@@ -109,7 +116,6 @@ class _SectionTimeEditorState extends ConsumerState<SectionTimeEditor> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
                         DropdownButton<int>(
                           value:
                               _durationOptions.contains(duration)
@@ -132,7 +138,6 @@ class _SectionTimeEditorState extends ConsumerState<SectionTimeEditor> {
                             }
                           },
                         ),
-                        const Spacer(),
                         Text(
                           endTime.isNotEmpty ? '→ $endTime' : '',
                           style: theme.textTheme.bodySmall?.copyWith(
