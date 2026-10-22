@@ -15,6 +15,10 @@ class CquAdapter extends SchoolAdapter {
   @override
   String get loginUrl => 'https://my.cqu.edu.cn';
 
+  // 校外未连 VPN 时教务系统直接显示 Page Not Found，而不是登录页。
+  @override
+  String get accessNote => '校外需先连接校园网或 aTrust VPN';
+
   @override
   String get scheduleUrl => 'https://my.cqu.edu.cn/tt/university-timetable';
 

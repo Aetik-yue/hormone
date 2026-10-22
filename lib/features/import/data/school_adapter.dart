@@ -64,6 +64,9 @@ abstract class SchoolAdapter {
   /// 教务系统产品或抓取策略名称。
   String get systemName => '专用适配';
 
+  /// 打开教务系统前需要告知用户的访问条件（如校外需连 VPN），无则为 null。
+  String? get accessNote => null;
+
   /// 是否为内置适配器（非用户自定义）。
   bool get isBuiltin => true;
 }

@@ -29,6 +29,10 @@ void main() {
     expect(adapter.isSchedulePage(adapter.loginUrl), isFalse);
   });
 
+  test('打开前提示校外需连接校园网或 VPN', () {
+    expect(CquAdapter().accessNote, '校外需先连接校园网或 aTrust VPN');
+  });
+
   group('CquAdapter extractJs', () {
     test('普通课与无编号实验课混排时保留周四6-9节及各自周次', () async {
       final courses = await _runExtractor(r'''

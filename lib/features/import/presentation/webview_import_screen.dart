@@ -491,6 +491,16 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     _cacheMissRecoveryAttempted = false;
     ref.read(webviewImportProvider.notifier).startLogin();
     unawaited(_loadFresh(controller, adapter.loginUrl));
+
+    final accessNote = adapter.accessNote;
+    if (accessNote != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(accessNote),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    }
   }
 
   /// 使用新的 GET 请求打开页面，避免重放登录 POST 导致 ERR_CACHE_MISS。
