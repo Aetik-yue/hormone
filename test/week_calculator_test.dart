@@ -51,6 +51,24 @@ void main() {
     });
   });
 
+  group('clampWeek', () {
+    test('把周次钳制到 1..totalWeeks', () {
+      expect(clampWeek(0, 18), 1);
+      expect(clampWeek(-3, 18), 1);
+      expect(clampWeek(1, 18), 1);
+      expect(clampWeek(18, 18), 18);
+      expect(clampWeek(19, 18), 18);
+      expect(clampWeek(2, 1), 1);
+    });
+
+    test('总周数小于 1 时按 1 周处理', () {
+      expect(clampWeek(0, 0), 1);
+      expect(clampWeek(1, 0), 1);
+      expect(clampWeek(3, 0), 1);
+      expect(clampWeek(3, -5), 1);
+    });
+  });
+
   group('dateForWeekday', () {
     test('第1周周一 = 开学日', () {
       expect(dateForWeekday(monday, 1, 1), DateTime(2024, 9, 2));

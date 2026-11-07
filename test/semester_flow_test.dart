@@ -296,6 +296,35 @@ void main() {
     });
   });
 
+  // 非周一开学时结束日期 = 开学日所在周的周一 + 18*7-1 天。
+  // 周二这一例在 UTC 下能卡住旧公式（startDate + 18*7-1 天），但在有夏令时
+  // 的时区里 125*24 小时会把日期挪回前一天，旧实现也会显示 2027-01-03；
+  // 周四这一例在旧公式下任何时区都至少多出 2 天（本机 PST 下为 2027-01-05），
+  // 因此它是唯一与时区无关的回归判别。
+  for (final (start, expectedRange) in [
+    (DateTime(2026, 9, 1), '2026-09-01 ~ 2027-01-03'),
+    (DateTime(2026, 9, 3), '2026-09-03 ~ 2027-01-03'),
+  ]) {
+    testWidgets(
+      '非周一开学（${start.month}月${start.day}日）时卡片按最后一周的周日显示结束日期',
+      (tester) async {
+        await tester.runAsync(() async {
+          await container.read(semesterRepositoryProvider).upsert(
+                Semester(
+                  id: 'non-monday',
+                  name: '非周一开学学期',
+                  startDate: start,
+                  totalWeeks: 18,
+                ),
+              );
+          await openSemesters(tester);
+          expect(find.text(expectedRange), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        });
+      },
+    );
+  }
+
   testWidgets('保存学期后列表显示新名称删除最后学期后立即显示默认学期', (tester) async {
     await tester.runAsync(() async {
       await openSemesters(tester);

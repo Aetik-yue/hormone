@@ -29,9 +29,7 @@ class SelectedWeekNotifier extends StateNotifier<int> {
       if (!mounted || semester == null) return;
       // 优先使用手动覆盖的当前周（调课/假期），否则按开学日期推算。
       final computed = currentWeekOf(semester, _now());
-      final capped = computed < 1
-          ? 1
-          : (computed > semester.totalWeeks ? semester.totalWeeks : computed);
+      final capped = clampWeek(computed, semester.totalWeeks);
       if (!_userChanged) state = capped;
     } catch (_) {
       // 数据库异常时保持默认第 1 周，避免首屏崩溃。
@@ -42,7 +40,6 @@ class SelectedWeekNotifier extends StateNotifier<int> {
   /// 周次会被钳制到 [1, totalWeeks] 范围内。
   void goTo(int week, {int totalWeeks = 999}) {
     _userChanged = true;
-    final clamped = week < 1 ? 1 : (week > totalWeeks ? totalWeeks : week);
-    state = clamped;
+    state = clampWeek(week, totalWeeks);
   }
 }

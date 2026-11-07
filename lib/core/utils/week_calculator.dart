@@ -14,6 +14,12 @@ Semester normalizeSemesterWeeks(Semester semester) {
   );
 }
 
+/// 把周次钳制到 `1..totalWeeks`；[totalWeeks] 小于 1 时按 1 周处理。
+int clampWeek(int week, int totalWeeks) {
+  final lastWeek = totalWeeks < 1 ? 1 : totalWeeks;
+  return week < 1 ? 1 : (week > lastWeek ? lastWeek : week);
+}
+
 /// 根据开学日期与今天推算当前周（1-based）。早于开学返回 0。
 int computeCurrentWeek(DateTime startDate, DateTime today) {
   final start = DateTime(startDate.year, startDate.month, startDate.day);

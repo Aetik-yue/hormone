@@ -103,8 +103,7 @@ class _SemesterCard extends StatelessWidget {
     final weekLabel = week != null
         ? '第 $week 周'
         : (currentWeekOf(semester, now) < 1 ? '未开学' : '已结束');
-    final end = semester.startDate
-        .add(Duration(days: semester.totalWeeks * 7 - 1));
+    final end = lastSemesterDay(semester);
     final range =
         '${DateFormat('yyyy-MM-dd').format(semester.startDate)} ~ ${DateFormat('yyyy-MM-dd').format(end)}';
 
@@ -304,11 +303,8 @@ class _SemesterEditSheetState extends ConsumerState<SemesterEditSheet> {
                         // 默认使用计算出的当前周，而非最后一周
                         final computedWeek = computeCurrentWeek(
                             semester.startDate, DateTime.now());
-                        final defaultWeek = computedWeek < 1
-                            ? 1
-                            : (computedWeek > semester.totalWeeks
-                                ? semester.totalWeeks
-                                : computedWeek);
+                        final defaultWeek =
+                            clampWeek(computedWeek, semester.totalWeeks);
                         ref
                             .read(semesterFormProvider.notifier)
                             .setCurrentWeekOverride(
@@ -319,9 +315,10 @@ class _SemesterEditSheetState extends ConsumerState<SemesterEditSheet> {
                   if (_overrideOn)
                     _Stepper(
                       value: semester.currentWeekOverride ??
-                          computeCurrentWeek(
-                              semester.startDate, DateTime.now())
-                              .clamp(1, semester.totalWeeks),
+                          clampWeek(
+                              computeCurrentWeek(
+                                  semester.startDate, DateTime.now()),
+                              semester.totalWeeks),
                       min: 1,
                       max: semester.totalWeeks,
                       onChanged: (v) => ref

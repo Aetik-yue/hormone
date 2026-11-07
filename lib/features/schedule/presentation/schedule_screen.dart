@@ -377,7 +377,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// 所有显式跳周都使用同一套动画；距离越远动画略长，但设置上限避免拖沓。
   /// 系统要求减少动态效果时直接跳转，尊重无障碍偏好。
   void _animateToWeek(int week, int totalWeeks) {
-    final safeWeek = week.clamp(1, totalWeeks);
+    final safeWeek = clampWeek(week, totalWeeks);
     final targetPage = safeWeek - 1;
     if (!_pageController.hasClients ||
         MediaQuery.of(context).disableAnimations) {
