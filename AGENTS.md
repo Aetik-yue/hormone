@@ -52,7 +52,7 @@ drift generates data classes also named `Course` / `Semester`, identical to the 
 
 ### Import pipeline
 
-`features/import/` supports three sources: WebView教务-system import, ICS file, JSON file. `ImportCourse` (`domain/import_course.dart`) is the intermediate, persistence-free representation used for the preview/select UI before writing to the DB; `Course.id` is generated at write time. `coursesConflict(a, b)` checks day + section overlap + week intersection. Adding a new school's教务 system = implement `SchoolAdapter` (`loginUrl`, `isSchedulePage`, `extractJs`) in `features/import/data/`, then register it in the `_schoolCatalog` table in `school_adapter.dart`. `extractJs` must emit JSON that `previewWebviewCourses` (`domain/webview_course_parser.dart`) can parse and validate.
+`features/import/` supports three sources: WebView教务-system import, ICS file, JSON file. `ImportCourse` (`domain/import_course.dart`) is the intermediate, persistence-free representation used for the preview/select UI before writing to the DB; `Course.id` is generated at write time. `coursesConflict(a, b)` checks day + section overlap + week intersection. Adding a new school's教务 system = implement `SchoolAdapter` (`pinyin`, `loginUrl`, `isSchedulePage`, `extractJs`) in `features/import/data/`, then register it in the `_schoolCatalog` table in `school_adapter.dart`. `extractJs` must emit JSON that `previewWebviewCourses` (`domain/webview_course_parser.dart`) can parse and validate.
 
 ### Routing conventions
 
