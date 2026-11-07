@@ -27,6 +27,9 @@ class JgsuAdapter extends SchoolAdapter {
   String get schoolName => '井冈山大学';
 
   @override
+  String get pinyin => 'jinggangshandaxue';
+
+  @override
   String get loginUrl => 'https://ehall.jgsu.edu.cn/';
 
   @override

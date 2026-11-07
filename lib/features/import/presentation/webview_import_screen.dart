@@ -248,7 +248,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   bool _matchesSchool(SchoolAdapter adapter, String query) {
     if (query.isEmpty) return true;
     return adapter.schoolName.toLowerCase().contains(query) ||
-        schoolAlphabeticalKey(adapter.schoolName).contains(query) ||
+        adapter.pinyin.contains(query) ||
         adapter.systemName.toLowerCase().contains(query) ||
         adapter.loginUrl.toLowerCase().contains(query);
   }

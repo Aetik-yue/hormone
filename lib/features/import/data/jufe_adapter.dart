@@ -11,6 +11,9 @@ class JufeAdapter extends SchoolAdapter {
   String get schoolName => '江西财经大学';
 
   @override
+  String get pinyin => 'jiangxicaijingdaxue';
+
+  @override
   String get loginUrl => 'http://xk.jxufe.edu.cn/';
 
   @override

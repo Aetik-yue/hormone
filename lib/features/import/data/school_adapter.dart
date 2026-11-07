@@ -31,6 +31,11 @@ abstract class SchoolAdapter {
   /// 学校名称（显示用）。
   String get schoolName;
 
+  /// 校名无声调拼音，用于稳定的字母排序和拼音搜索。
+  ///
+  /// 目录中的学校显式给出拼音；未提供时回退到小写校名。
+  String get pinyin => schoolName.toLowerCase();
+
   /// 教务系统登录页 URL。
   String get loginUrl;
 
@@ -72,271 +77,63 @@ abstract class SchoolAdapter {
   String? get accessNote => null;
 }
 
-/// 按学校入口和教务产品类型配置的高校适配器。
+/// 内置学校目录：名称、拼音、登录入口与教务产品类型合成一张表。
 ///
-/// 具备单独页面解析逻辑的学校在文件末尾注册专用适配器；其余学校复用
-/// 对应教务产品的兼容规则，无法确认产品类型的学校使用通用抓取器。
-final List<SchoolAdapter> _configuredUniversityAdapters = List.unmodifiable([
+/// 配置型学校直接构造 [ConfiguredSchoolAdapter]；写了专用提取脚本的学校
+/// 在表里放它的适配器实例，名称、拼音与登录入口由该适配器自身提供。
+final List<SchoolAdapter> _schoolCatalog = List.unmodifiable([
   CquAdapter(),
-  const ConfiguredSchoolAdapter(
-    schoolName: '北京大学',
-    loginUrl: 'https://elective.pku.edu.cn/',
-    system: AcademicSystemType.urp,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '清华大学',
-    loginUrl: 'http://zhjw.cic.tsinghua.edu.cn/',
-    system: AcademicSystemType.urp,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '中国人民大学',
-    loginUrl: 'https://jw.ruc.edu.cn/Njw2017/login.html',
-    system: AcademicSystemType.wisedu,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '北京航空航天大学',
-    loginUrl: 'http://bhjwc.buaa.edu.cn/',
-    system: AcademicSystemType.zhengfang,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '北京理工大学',
-    loginUrl: 'http://jwms.bit.edu.cn/',
-    system: AcademicSystemType.wisedu,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '中国农业大学',
-    loginUrl: 'http://newjw.cau.edu.cn/',
-    system: AcademicSystemType.qiangzhi,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '北京师范大学',
-    loginUrl: 'http://zyfw.prsc.bnu.edu.cn/cas/login.action',
-    system: AcademicSystemType.kingosoft,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '中央民族大学',
-    loginUrl: 'https://jwxs.muc.edu.cn/login',
-    system: AcademicSystemType.urp,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '南开大学',
-    loginUrl: 'http://eamis.nankai.edu.cn/',
-    system: AcademicSystemType.qiangzhi,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '天津大学',
-    loginUrl: 'http://eam.tju.edu.cn/',
-    system: AcademicSystemType.urp,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '大连理工大学',
-    loginUrl: 'http://teach.dlut.edu.cn/',
-    system: AcademicSystemType.qiangzhi,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '东北大学',
-    loginUrl: 'https://jwxt.neu.edu.cn/',
-    system: AcademicSystemType.generic,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '吉林大学',
-    loginUrl: 'http://uims.jlu.edu.cn/',
-    system: AcademicSystemType.kingosoft,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '哈尔滨工业大学',
-    loginUrl: 'http://jwts.hit.edu.cn/',
-    system: AcademicSystemType.kingosoft,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '复旦大学',
-    loginUrl: 'http://xk.fudan.edu.cn/',
-    system: AcademicSystemType.urp,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '同济大学',
-    loginUrl: 'http://1.tongji.edu.cn/',
-    system: AcademicSystemType.generic,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '上海交通大学',
-    loginUrl: 'http://i.sjtu.edu.cn/',
-    system: AcademicSystemType.kingosoft,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '华东师范大学',
-    loginUrl: 'http://www.idc.ecnu.edu.cn/',
-    system: AcademicSystemType.kingosoft,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '南京大学',
-    loginUrl: 'http://jw.nju.edu.cn/',
-    system: AcademicSystemType.kingosoft,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '东南大学',
-    loginUrl: 'http://ehall.seu.edu.cn/',
-    system: AcademicSystemType.urp,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '浙江大学',
-    loginUrl: 'https://jwbinfosys.zju.edu.cn/',
-    system: AcademicSystemType.zhengfang,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '中国科学技术大学',
-    loginUrl: 'https://jw.ustc.edu.cn/',
-    system: AcademicSystemType.zhengfang,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '厦门大学',
-    loginUrl: 'http://jw.xmu.edu.cn/',
-    system: AcademicSystemType.kingosoft,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '山东大学',
-    loginUrl: 'http://bkjw.sdu.edu.cn/',
-    system: AcademicSystemType.zhengfang,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '中国海洋大学',
-    loginUrl: 'https://id.ouc.edu.cn/sso/login',
-    system: AcademicSystemType.kingosoft,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '武汉大学',
-    loginUrl: 'http://jwgl.whu.edu.cn/',
-    system: AcademicSystemType.qiangzhi,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '华中科技大学',
-    loginUrl: 'http://hub.hust.edu.cn/',
-    system: AcademicSystemType.urp,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '湖南大学',
-    loginUrl: 'http://hdjw.hnu.edu.cn/',
-    system: AcademicSystemType.southSoft,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '中南大学',
-    loginUrl: 'http://csujwc.its.csu.edu.cn/',
-    system: AcademicSystemType.zhengfang,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '国防科技大学',
-    loginUrl: 'https://www.nudt.edu.cn/',
-    system: AcademicSystemType.generic,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '中山大学',
-    loginUrl: 'http://uems.sysu.edu.cn/',
-    system: AcademicSystemType.zhengfang,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '华南理工大学',
-    loginUrl: 'http://xsjw2018.jw.scut.edu.cn/',
-    system: AcademicSystemType.zhengfang,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '四川大学',
-    loginUrl: 'http://zhjw.scu.edu.cn/index',
-    system: AcademicSystemType.urp,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '电子科技大学',
-    loginUrl: 'https://eportal.uestc.edu.cn/',
-    system: AcademicSystemType.generic,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '西安交通大学',
-    loginUrl: 'http://ehall.xjtu.edu.cn/',
-    system: AcademicSystemType.qiangzhi,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '西北工业大学',
-    loginUrl: 'https://uis.nwpu.edu.cn/',
-    system: AcademicSystemType.urp,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '西北农林科技大学',
-    loginUrl: 'https://newehall.nwafu.edu.cn/',
-    system: AcademicSystemType.wisedu,
-  ),
-  const ConfiguredSchoolAdapter(
-    schoolName: '兰州大学',
-    loginUrl: 'http://jwk.lzu.edu.cn/academic/login/lzu/loginIds6Valid.jsp',
-    system: AcademicSystemType.urp,
-  ),
+  const ConfiguredSchoolAdapter(schoolName: '北京大学', pinyin: 'beijingdaxue', loginUrl: 'https://elective.pku.edu.cn/', system: AcademicSystemType.urp),
+  const ConfiguredSchoolAdapter(schoolName: '清华大学', pinyin: 'qinghuadaxue', loginUrl: 'http://zhjw.cic.tsinghua.edu.cn/', system: AcademicSystemType.urp),
+  const ConfiguredSchoolAdapter(schoolName: '中国人民大学', pinyin: 'zhongguorenmindaxue', loginUrl: 'https://jw.ruc.edu.cn/Njw2017/login.html', system: AcademicSystemType.wisedu),
+  const ConfiguredSchoolAdapter(schoolName: '北京航空航天大学', pinyin: 'beijinghangkonghangtiandaxue', loginUrl: 'http://bhjwc.buaa.edu.cn/', system: AcademicSystemType.zhengfang),
+  const ConfiguredSchoolAdapter(schoolName: '北京理工大学', pinyin: 'beijingligongdaxue', loginUrl: 'http://jwms.bit.edu.cn/', system: AcademicSystemType.wisedu),
+  const ConfiguredSchoolAdapter(schoolName: '中国农业大学', pinyin: 'zhongguonongyedaxue', loginUrl: 'http://newjw.cau.edu.cn/', system: AcademicSystemType.qiangzhi),
+  const ConfiguredSchoolAdapter(schoolName: '北京师范大学', pinyin: 'beijingshifandaxue', loginUrl: 'http://zyfw.prsc.bnu.edu.cn/cas/login.action', system: AcademicSystemType.kingosoft),
+  const ConfiguredSchoolAdapter(schoolName: '中央民族大学', pinyin: 'zhongyangminzudaxue', loginUrl: 'https://jwxs.muc.edu.cn/login', system: AcademicSystemType.urp),
+  const ConfiguredSchoolAdapter(schoolName: '南开大学', pinyin: 'nankaidaxue', loginUrl: 'http://eamis.nankai.edu.cn/', system: AcademicSystemType.qiangzhi),
+  const ConfiguredSchoolAdapter(schoolName: '天津大学', pinyin: 'tianjindaxue', loginUrl: 'http://eam.tju.edu.cn/', system: AcademicSystemType.urp),
+  const ConfiguredSchoolAdapter(schoolName: '大连理工大学', pinyin: 'dalianligongdaxue', loginUrl: 'http://teach.dlut.edu.cn/', system: AcademicSystemType.qiangzhi),
+  const ConfiguredSchoolAdapter(schoolName: '东北大学', pinyin: 'dongbeidaxue', loginUrl: 'https://jwxt.neu.edu.cn/', system: AcademicSystemType.generic),
+  const ConfiguredSchoolAdapter(schoolName: '吉林大学', pinyin: 'jilindaxue', loginUrl: 'http://uims.jlu.edu.cn/', system: AcademicSystemType.kingosoft),
+  const ConfiguredSchoolAdapter(schoolName: '哈尔滨工业大学', pinyin: 'haerbingongyedaxue', loginUrl: 'http://jwts.hit.edu.cn/', system: AcademicSystemType.kingosoft),
+  const ConfiguredSchoolAdapter(schoolName: '复旦大学', pinyin: 'fudandaxue', loginUrl: 'http://xk.fudan.edu.cn/', system: AcademicSystemType.urp),
+  const ConfiguredSchoolAdapter(schoolName: '同济大学', pinyin: 'tongjidaxue', loginUrl: 'http://1.tongji.edu.cn/', system: AcademicSystemType.generic),
+  const ConfiguredSchoolAdapter(schoolName: '上海交通大学', pinyin: 'shanghaijiaotongdaxue', loginUrl: 'http://i.sjtu.edu.cn/', system: AcademicSystemType.kingosoft),
+  const ConfiguredSchoolAdapter(schoolName: '华东师范大学', pinyin: 'huadongshifandaxue', loginUrl: 'http://www.idc.ecnu.edu.cn/', system: AcademicSystemType.kingosoft),
+  const ConfiguredSchoolAdapter(schoolName: '南京大学', pinyin: 'nanjingdaxue', loginUrl: 'http://jw.nju.edu.cn/', system: AcademicSystemType.kingosoft),
+  const ConfiguredSchoolAdapter(schoolName: '东南大学', pinyin: 'dongnandaxue', loginUrl: 'http://ehall.seu.edu.cn/', system: AcademicSystemType.urp),
+  const ConfiguredSchoolAdapter(schoolName: '浙江大学', pinyin: 'zhejiangdaxue', loginUrl: 'https://jwbinfosys.zju.edu.cn/', system: AcademicSystemType.zhengfang),
+  const ConfiguredSchoolAdapter(schoolName: '中国科学技术大学', pinyin: 'zhongguokexuejishudaxue', loginUrl: 'https://jw.ustc.edu.cn/', system: AcademicSystemType.zhengfang),
+  const ConfiguredSchoolAdapter(schoolName: '厦门大学', pinyin: 'xiamendaxue', loginUrl: 'http://jw.xmu.edu.cn/', system: AcademicSystemType.kingosoft),
+  const ConfiguredSchoolAdapter(schoolName: '山东大学', pinyin: 'shandongdaxue', loginUrl: 'http://bkjw.sdu.edu.cn/', system: AcademicSystemType.zhengfang),
+  const ConfiguredSchoolAdapter(schoolName: '中国海洋大学', pinyin: 'zhongguohaiyangdaxue', loginUrl: 'https://id.ouc.edu.cn/sso/login', system: AcademicSystemType.kingosoft),
+  const ConfiguredSchoolAdapter(schoolName: '武汉大学', pinyin: 'wuhandaxue', loginUrl: 'http://jwgl.whu.edu.cn/', system: AcademicSystemType.qiangzhi),
+  const ConfiguredSchoolAdapter(schoolName: '华中科技大学', pinyin: 'huazhongkejidaxue', loginUrl: 'http://hub.hust.edu.cn/', system: AcademicSystemType.urp),
+  const ConfiguredSchoolAdapter(schoolName: '湖南大学', pinyin: 'hunandaxue', loginUrl: 'http://hdjw.hnu.edu.cn/', system: AcademicSystemType.southSoft),
+  const ConfiguredSchoolAdapter(schoolName: '中南大学', pinyin: 'zhongnandaxue', loginUrl: 'http://csujwc.its.csu.edu.cn/', system: AcademicSystemType.zhengfang),
+  const ConfiguredSchoolAdapter(schoolName: '国防科技大学', pinyin: 'guofangkejidaxue', loginUrl: 'https://www.nudt.edu.cn/', system: AcademicSystemType.generic),
+  const ConfiguredSchoolAdapter(schoolName: '中山大学', pinyin: 'zhongshandaxue', loginUrl: 'http://uems.sysu.edu.cn/', system: AcademicSystemType.zhengfang),
+  const ConfiguredSchoolAdapter(schoolName: '华南理工大学', pinyin: 'huananligongdaxue', loginUrl: 'http://xsjw2018.jw.scut.edu.cn/', system: AcademicSystemType.zhengfang),
+  const ConfiguredSchoolAdapter(schoolName: '四川大学', pinyin: 'sichuandaxue', loginUrl: 'http://zhjw.scu.edu.cn/index', system: AcademicSystemType.urp),
+  const ConfiguredSchoolAdapter(schoolName: '电子科技大学', pinyin: 'dianzikejidaxue', loginUrl: 'https://eportal.uestc.edu.cn/', system: AcademicSystemType.generic),
+  const ConfiguredSchoolAdapter(schoolName: '西安交通大学', pinyin: 'xianjiaotongdaxue', loginUrl: 'http://ehall.xjtu.edu.cn/', system: AcademicSystemType.qiangzhi),
+  const ConfiguredSchoolAdapter(schoolName: '西北工业大学', pinyin: 'xibeigongyedaxue', loginUrl: 'https://uis.nwpu.edu.cn/', system: AcademicSystemType.urp),
+  const ConfiguredSchoolAdapter(schoolName: '西北农林科技大学', pinyin: 'xibeinonglinkejidaxue', loginUrl: 'https://newehall.nwafu.edu.cn/', system: AcademicSystemType.wisedu),
+  const ConfiguredSchoolAdapter(schoolName: '兰州大学', pinyin: 'lanzhoudaxue', loginUrl: 'http://jwk.lzu.edu.cn/academic/login/lzu/loginIds6Valid.jsp', system: AcademicSystemType.urp),
+  JgsuAdapter(),
+  JufeAdapter(),
+  NcuAdapter(),
+  SyuctAdapter(),
 ]);
 
 /// 已注册的学校适配器列表，按校名拼音字母顺序排列且不可变。
 final List<SchoolAdapter> schoolAdapters = List.unmodifiable(
-  <SchoolAdapter>[
-    ..._configuredUniversityAdapters,
-    JgsuAdapter(),
-    JufeAdapter(),
-    NcuAdapter(),
-    SyuctAdapter(),
-  ]..sort((a, b) {
-      final byPinyin = schoolAlphabeticalKey(a.schoolName)
-          .compareTo(schoolAlphabeticalKey(b.schoolName));
+  [..._schoolCatalog]..sort((a, b) {
+      final byPinyin = a.pinyin.compareTo(b.pinyin);
       return byPinyin != 0 ? byPinyin : a.schoolName.compareTo(b.schoolName);
     }),
 );
-
-/// 学校名称的无声调拼音键，用于稳定的字母排序和拼音搜索。
-///
-/// Dart 默认按 Unicode 码点排列中文，结果不等同于拼音顺序；内置学校
-/// 使用显式键，未来新增学校若尚未补键则回退到原名称。
-String schoolAlphabeticalKey(String schoolName) =>
-    _schoolPinyinKeys[schoolName] ?? schoolName.toLowerCase();
-
-const Map<String, String> _schoolPinyinKeys = {
-  '北京大学': 'beijingdaxue',
-  '北京航空航天大学': 'beijinghangkonghangtiandaxue',
-  '北京理工大学': 'beijingligongdaxue',
-  '北京师范大学': 'beijingshifandaxue',
-  '重庆大学': 'chongqingdaxue',
-  '大连理工大学': 'dalianligongdaxue',
-  '电子科技大学': 'dianzikejidaxue',
-  '东北大学': 'dongbeidaxue',
-  '东南大学': 'dongnandaxue',
-  '复旦大学': 'fudandaxue',
-  '国防科技大学': 'guofangkejidaxue',
-  '哈尔滨工业大学': 'haerbingongyedaxue',
-  '湖南大学': 'hunandaxue',
-  '华东师范大学': 'huadongshifandaxue',
-  '华南理工大学': 'huananligongdaxue',
-  '华中科技大学': 'huazhongkejidaxue',
-  '吉林大学': 'jilindaxue',
-  '江西财经大学': 'jiangxicaijingdaxue',
-  '井冈山大学': 'jinggangshandaxue',
-  '兰州大学': 'lanzhoudaxue',
-  '南昌大学': 'nanchangdaxue',
-  '南京大学': 'nanjingdaxue',
-  '南开大学': 'nankaidaxue',
-  '清华大学': 'qinghuadaxue',
-  '厦门大学': 'xiamendaxue',
-  '山东大学': 'shandongdaxue',
-  '上海交通大学': 'shanghaijiaotongdaxue',
-  '沈阳化工大学': 'shenyanghuagongdaxue',
-  '四川大学': 'sichuandaxue',
-  '天津大学': 'tianjindaxue',
-  '同济大学': 'tongjidaxue',
-  '武汉大学': 'wuhandaxue',
-  '西安交通大学': 'xianjiaotongdaxue',
-  '西北工业大学': 'xibeigongyedaxue',
-  '西北农林科技大学': 'xibeinonglinkejidaxue',
-  '浙江大学': 'zhejiangdaxue',
-  '中国海洋大学': 'zhongguohaiyangdaxue',
-  '中国科学技术大学': 'zhongguokexuejishudaxue',
-  '中国农业大学': 'zhongguonongyedaxue',
-  '中国人民大学': 'zhongguorenmindaxue',
-  '中南大学': 'zhongnandaxue',
-  '中山大学': 'zhongshandaxue',
-  '中央民族大学': 'zhongyangminzudaxue',
-};
 
 /// 创建通用适配器（用户自定义 URL）。
 SchoolAdapter createGenericAdapter(String url) =>

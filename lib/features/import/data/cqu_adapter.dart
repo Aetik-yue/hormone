@@ -14,6 +14,9 @@ class CquAdapter extends SchoolAdapter {
   String get schoolName => '重庆大学';
 
   @override
+  String get pinyin => 'chongqingdaxue';
+
+  @override
   String get loginUrl => 'https://my.cqu.edu.cn';
 
   // 校外未连 VPN 时教务系统直接显示 Page Not Found，而不是登录页。

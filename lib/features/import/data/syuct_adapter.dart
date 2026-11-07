@@ -20,6 +20,9 @@ class SyuctAdapter extends SchoolAdapter {
   String get schoolName => '沈阳化工大学';
 
   @override
+  String get pinyin => 'shenyanghuagongdaxue';
+
+  @override
   String get loginUrl => 'https://jws.syuct.edu.cn/';
 
   @override

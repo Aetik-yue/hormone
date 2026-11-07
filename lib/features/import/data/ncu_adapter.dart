@@ -16,6 +16,9 @@ class NcuAdapter extends SchoolAdapter {
   String get schoolName => '南昌大学';
 
   @override
+  String get pinyin => 'nanchangdaxue';
+
+  @override
   String get loginUrl => 'https://jwpt.ncu.edu.cn/jsxsd/sso.jsp';
 
   @override

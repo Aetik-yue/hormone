@@ -27,11 +27,18 @@ class ConfiguredSchoolAdapter extends SchoolAdapter {
 
   final AcademicSystemType system;
 
+  /// 校名无声调拼音；未显式给出时回退到小写校名。
+  final String? _pinyin;
+
   const ConfiguredSchoolAdapter({
     required this.schoolName,
     required this.loginUrl,
     required this.system,
-  });
+    String? pinyin,
+  }) : _pinyin = pinyin;
+
+  @override
+  String get pinyin => _pinyin ?? super.pinyin;
 
   // 配置型适配器不做课表页自动检测，提取由用户在页面上手动触发。
   @override

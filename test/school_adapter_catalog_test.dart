@@ -64,7 +64,7 @@ void main() {
 
   test('高校目录按校名拼音字母顺序排列', () {
     final actualKeys = schoolAdapters
-        .map((adapter) => schoolAlphabeticalKey(adapter.schoolName))
+        .map((adapter) => adapter.pinyin)
         .toList();
     final sortedKeys = [...actualKeys]..sort();
 
