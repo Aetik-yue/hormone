@@ -24,7 +24,7 @@ enum AdapterSupportLevel {
 /// 1. 打开 [loginUrl] 让用户登录
 /// 2. 用 [isSchedulePage] 检测是否已到达课表页
 /// 3. 页面加载完成后注入 [extractJs] 提取课程 JSON
-/// 4. 解析 JSON 为 [ExtractedCourse] 列表
+/// 4. 解析 JSON 为导入课程列表（校验见 `webview_course_parser.dart`）
 abstract class SchoolAdapter {
   const SchoolAdapter();
 
@@ -70,72 +70,6 @@ abstract class SchoolAdapter {
 
   /// 打开教务系统前需要告知用户的访问条件（如校外需连 VPN），无则为 null。
   String? get accessNote => null;
-}
-
-/// 从教务系统提取的单门课程（中间模型，尚未入库）。
-class ExtractedCourse {
-  final String name;
-  final String? teacher;
-  final String? location;
-  final int dayOfWeek; // 1-7
-  final int startSection;
-  final int endSection;
-  final List<int> weeks;
-
-  const ExtractedCourse({
-    required this.name,
-    this.teacher,
-    this.location,
-    required this.dayOfWeek,
-    required this.startSection,
-    required this.endSection,
-    required this.weeks,
-  });
-
-  factory ExtractedCourse.fromJson(Map<String, dynamic> json) {
-    final name = json['name'];
-    if (name is! String || name.trim().isEmpty) {
-      throw const FormatException('课程名为空或无效');
-    }
-    final dayOfWeek = json['dayOfWeek'];
-    if (dayOfWeek is! int || dayOfWeek < 1 || dayOfWeek > 7) {
-      throw const FormatException('星期缺失或无效');
-    }
-    final startSection = json['startSection'];
-    final endSection = json['endSection'];
-    if (startSection is! int || endSection is! int) {
-      throw const FormatException('节次缺失或无效');
-    }
-    if (startSection < 1 ||
-        startSection > 16 ||
-        endSection < 1 ||
-        endSection > 16) {
-      throw const FormatException('节次超出第1–16节');
-    }
-    if (endSection < startSection) {
-      throw const FormatException('结束节次早于开始节次');
-    }
-    final rawWeeks = json['weeks'];
-    if (rawWeeks is! List ||
-        rawWeeks.isEmpty ||
-        rawWeeks.any((w) => w is! int || w < 1)) {
-      throw const FormatException('周次缺失或无效');
-    }
-    final weeks = rawWeeks.cast<int>().toSet().toList()..sort();
-    if ((json['teacher'] != null && json['teacher'] is! String) ||
-        (json['location'] != null && json['location'] is! String)) {
-      throw const FormatException('教师或教室格式无效');
-    }
-    return ExtractedCourse(
-      name: name.trim(),
-      teacher: json['teacher'] as String?,
-      location: json['location'] as String?,
-      dayOfWeek: dayOfWeek,
-      startSection: startSection,
-      endSection: endSection,
-      weeks: List.unmodifiable(weeks),
-    );
-  }
 }
 
 /// 按学校入口和教务产品类型配置的高校适配器。

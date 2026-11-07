@@ -320,7 +320,7 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     final existingCourses = state.mode == ImportMode.merge
         ? ref.watch(scheduleCoursesProvider).valueOrNull ?? const <Course>[]
         : const <Course>[];
-    final conflictedNames = _conflictNames(state, existingCourses);
+    final conflictedNames = conflictNames(state.courses, existingCourses);
     return Column(
       children: [
         Container(
@@ -349,39 +349,9 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: SegmentedButton<ImportMode>(
-            segments: const [
-              ButtonSegment(
-                value: ImportMode.replace,
-                icon: Icon(Icons.restart_alt, size: 18),
-                label: Text('替换'),
-              ),
-              ButtonSegment(
-                value: ImportMode.merge,
-                icon: Icon(Icons.library_add_outlined, size: 18),
-                label: Text('合并'),
-              ),
-            ],
-            selected: {state.mode},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) =>
-                ref.read(webviewImportProvider.notifier).setMode(s.first),
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: theme.colorScheme.secondaryContainer,
-          child: Text(
-            state.mode == ImportMode.merge
-                ? '合并模式：保留现有课表，追加所选课程。'
-                : '替换模式：所选课程将替换当前学期的原有课表。',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSecondaryContainer,
-            ),
-          ),
+        ImportModeSelector(
+          mode: state.mode,
+          onChanged: notifier.setMode,
         ),
         if (state.skippedCount > 0)
           Container(
@@ -439,30 +409,6 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
         ),
       ],
     );
-  }
-
-  /// 返回存在时间冲突的已选课程名称集合（内部冲突 + 与现有课表冲突）。
-  Set<String> _conflictNames(
-    WebviewImportState state,
-    List<Course> existingCourses,
-  ) {
-    final selected = state.courses.where((c) => c.selected).toList();
-    final names = <String>{};
-    for (var i = 0; i < selected.length; i++) {
-      for (var j = i + 1; j < selected.length; j++) {
-        if (coursesConflict(selected[i], selected[j])) {
-          names
-            ..add(selected[i].name)
-            ..add(selected[j].name);
-        }
-      }
-      for (final e in existingCourses) {
-        if (conflictsWithCourse(selected[i], e)) {
-          names.add(selected[i].name);
-        }
-      }
-    }
-    return names;
   }
 
   // ── 逻辑 ──

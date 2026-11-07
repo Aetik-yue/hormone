@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:recess/core/constants/app_constants.dart';
 import 'package:recess/core/models/course.dart';
 import 'package:recess/core/models/course_platform.dart';
 import 'package:recess/features/import/domain/import_course.dart';
@@ -13,6 +14,8 @@ ImportCourse _c({
   List<int> weeks = const [1, 2, 3],
   String? startTime,
   String? endTime,
+  int colorValue = AppConstants.defaultCourseColor,
+  String? notes,
 }) =>
     ImportCourse(
       name: name,
@@ -24,6 +27,8 @@ ImportCourse _c({
       weeks: weeks,
       startTime: startTime,
       endTime: endTime,
+      colorValue: colorValue,
+      notes: notes,
       source: 'json',
     );
 
@@ -118,6 +123,75 @@ void main() {
         weeks: [1],
       );
       expect(conflictsWithCourse(imp, existing), isFalse);
+    });
+  });
+
+  group('withSelected', () {
+    test('返回勾选状态翻转的副本，原对象与其余字段不变', () {
+      final c = _c(name: '高数', teacher: '王', location: '教二',
+          weeks: const [1, 3], startTime: '08:00', endTime: '08:45',
+          colorValue: 0xFF123456, notes: '带作业本');
+      final copy = c.withSelected(false);
+      expect(c.selected, isTrue);
+      expect(copy.selected, isFalse);
+      expect(copy.name, c.name);
+      expect(copy.teacher, c.teacher);
+      expect(copy.location, c.location);
+      expect(copy.dayOfWeek, c.dayOfWeek);
+      expect(copy.startSection, c.startSection);
+      expect(copy.endSection, c.endSection);
+      expect(copy.startTime, c.startTime);
+      expect(copy.endTime, c.endTime);
+      expect(copy.useExplicitTimes, c.useExplicitTimes);
+      expect(copy.weeks, c.weeks);
+      expect(copy.colorValue, c.colorValue);
+      expect(copy.notes, c.notes);
+      expect(copy.source, c.source);
+    });
+  });
+
+  group('conflictNames', () {
+    test('返回勾选课程之间的内部冲突名称', () {
+      final a = _c(name: 'A', day: 1, start: 1, end: 2, weeks: const [1]);
+      final b = _c(name: 'B', day: 1, start: 2, end: 3, weeks: const [1]);
+      final c = _c(name: 'C', day: 2, start: 1, end: 2, weeks: const [1]);
+      expect(conflictNames([a, b, c], const []), {'A', 'B'});
+    });
+
+    test('未勾选课程不参与内部冲突或与现有课表的冲突', () {
+      final a = _c(name: 'A', day: 1, start: 1, end: 2, weeks: const [1]);
+      final b = _c(name: 'B', day: 1, start: 1, end: 2, weeks: const [1])
+        ..selected = false;
+      const existing = Course(
+        id: 'e1',
+        semesterId: 's',
+        name: '旧课',
+        dayOfWeek: 1,
+        startSection: 1,
+        endSection: 2,
+        weeks: [1],
+      );
+      expect(conflictNames([a, b], [existing]), {'A'});
+    });
+
+    test('与现有课程时间重叠的导入课程计入冲突', () {
+      final imp = _c(name: '新课', day: 1, start: 1, end: 2, weeks: const [1]);
+      const existing = Course(
+        id: 'e1',
+        semesterId: 's',
+        name: '旧课',
+        dayOfWeek: 1,
+        startSection: 2,
+        endSection: 3,
+        weeks: [1],
+      );
+      expect(conflictNames([imp], [existing]), {'新课'});
+    });
+
+    test('无任何冲突时返回空集', () {
+      final a = _c(name: 'A', day: 1, start: 1, end: 2, weeks: const [1]);
+      final b = _c(name: 'B', day: 1, start: 3, end: 4, weeks: const [1]);
+      expect(conflictNames([a, b], const []), isEmpty);
     });
   });
 

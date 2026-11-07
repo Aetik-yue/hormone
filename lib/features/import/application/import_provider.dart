@@ -150,13 +150,13 @@ class ImportNotifier extends StateNotifier<ImportState> {
   void toggleSelected(int index) {
     if (index < 0 || index >= state.courses.length) return;
     final list = [...state.courses];
-    list[index] = list[index]._copyWithSelected(!list[index].selected);
+    list[index] = list[index].withSelected(!list[index].selected);
     state = state.copyWith(courses: list);
   }
 
   void setAllSelected(bool selected) {
     state = state.copyWith(
-      courses: state.courses.map((c) => c._copyWithSelected(selected)).toList(),
+      courses: state.courses.map((c) => c.withSelected(selected)).toList(),
     );
   }
 
@@ -251,24 +251,4 @@ class ImportNotifier extends StateNotifier<ImportState> {
     // withData:true 应始终提供字节；缺失视为错误。
     throw Exception('无法读取文件内容，请重试。');
   }
-}
-
-/// [ImportCourse] 的私有便捷复制（仅翻转 selected），避免对外暴露可变字段。
-extension _ImportCourseCopy on ImportCourse {
-  ImportCourse _copyWithSelected(bool selected) => ImportCourse(
-        name: name,
-        teacher: teacher,
-        location: location,
-        dayOfWeek: dayOfWeek,
-        startSection: startSection,
-        endSection: endSection,
-        startTime: startTime,
-        endTime: endTime,
-        useExplicitTimes: useExplicitTimes,
-        weeks: weeks,
-        colorValue: colorValue,
-        notes: notes,
-        source: source,
-        selected: selected,
-      );
 }

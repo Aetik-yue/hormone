@@ -209,7 +209,7 @@ version/                 # 发版时新建的更新日志
 
 1. 在 `lib/features/import/data/` 中实现 `SchoolAdapter`，提供学校名称、登录地址、课表地址、页面识别逻辑和 `extractJs`。
 2. 在 `school_adapter.dart` 中注册适配器，并补充拼音搜索键和适配级别；可复用教务产品规则的学校可使用 `ConfiguredSchoolAdapter`。
-3. 提取结果返回符合 `ExtractedCourse.fromJson` 的 JSON 字符串：包含 `name`、`dayOfWeek`、`startSection`、`endSection`、`weeks`，以及可选的 `teacher`、`location`。
+3. 提取结果返回 `previewWebviewCourses` 可解析校验的 JSON 字符串：包含 `name`、`dayOfWeek`、`startSection`、`endSection`、`weeks`，以及可选的 `teacher`、`location`。
 4. 为解析规则补充回归测试，覆盖周次、连续节次、重复课程和空页面；可参考 `test/cqu_adapter_test.dart`、`test/jgsu_adapter_test.dart`。
 
 星期使用 1–7，周次从 1 开始。提取脚本应规范化节次，保证开始节次不大于结束节次。学校目录、通用规则和专用适配器都位于同一数据目录，便于对照实现。

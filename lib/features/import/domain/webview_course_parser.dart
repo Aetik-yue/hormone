@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:recess/features/import/data/school_adapter.dart';
 import 'import_course.dart';
 import 'webview_preview_context.dart';
 export 'webview_preview_context.dart';
@@ -23,7 +22,7 @@ dynamic decodeWebviewExtractResult(Object? result) {
       if (record is! Map<String, dynamic>) {
         throw const FormatException('课程记录格式无效');
       }
-      courses.add(toImportCourse(ExtractedCourse.fromJson(record)));
+      courses.add(_parseCourse(record));
     } on FormatException catch (e) {
       reasons.update(e.message, (count) => count + 1, ifAbsent: () => 1);
     }
@@ -31,17 +30,52 @@ dynamic decodeWebviewExtractResult(Object? result) {
   return (courses, reasons);
 }
 
-/// 把已校验的抓取记录转换成共同导入表示。
-ImportCourse toImportCourse(ExtractedCourse c) => ImportCourse(
-  name: c.name,
-  teacher: c.teacher,
-  location: c.location,
-  dayOfWeek: c.dayOfWeek,
-  startSection: c.startSection,
-  endSection: c.endSection,
-  weeks: c.weeks,
-  source: 'webview',
-);
+/// 校验单条抓取记录并转换为共同导入表示。
+ImportCourse _parseCourse(Map<String, dynamic> json) {
+  final name = json['name'];
+  if (name is! String || name.trim().isEmpty) {
+    throw const FormatException('课程名为空或无效');
+  }
+  final dayOfWeek = json['dayOfWeek'];
+  if (dayOfWeek is! int || dayOfWeek < 1 || dayOfWeek > 7) {
+    throw const FormatException('星期缺失或无效');
+  }
+  final startSection = json['startSection'];
+  final endSection = json['endSection'];
+  if (startSection is! int || endSection is! int) {
+    throw const FormatException('节次缺失或无效');
+  }
+  if (startSection < 1 ||
+      startSection > 16 ||
+      endSection < 1 ||
+      endSection > 16) {
+    throw const FormatException('节次超出第1–16节');
+  }
+  if (endSection < startSection) {
+    throw const FormatException('结束节次早于开始节次');
+  }
+  final rawWeeks = json['weeks'];
+  if (rawWeeks is! List ||
+      rawWeeks.isEmpty ||
+      rawWeeks.any((w) => w is! int || w < 1)) {
+    throw const FormatException('周次缺失或无效');
+  }
+  final weeks = rawWeeks.cast<int>().toSet().toList()..sort();
+  if ((json['teacher'] != null && json['teacher'] is! String) ||
+      (json['location'] != null && json['location'] is! String)) {
+    throw const FormatException('教师或教室格式无效');
+  }
+  return ImportCourse(
+    name: name.trim(),
+    teacher: json['teacher'] as String?,
+    location: json['location'] as String?,
+    dayOfWeek: dayOfWeek,
+    startSection: startSection,
+    endSection: endSection,
+    weeks: List.unmodifiable(weeks),
+    source: 'webview',
+  );
+}
 
 /// 有效课程、逐条跳过诊断及学期冲突，共同组成一次预览。
 class WebviewCoursePreview {

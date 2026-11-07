@@ -187,7 +187,7 @@ class _PreviewList extends ConsumerWidget {
             : const <Course>[];
 
     // 内部 pairwise 冲突 +（合并模式下）与现有课表的冲突。
-    final conflicts = _conflictNames(state, existingCourses);
+    final conflicts = conflictNames(state.courses, existingCourses);
 
     return Column(
       children: [
@@ -209,43 +209,9 @@ class _PreviewList extends ConsumerWidget {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SegmentedButton<ImportMode>(
-            segments: const [
-              ButtonSegment(
-                value: ImportMode.replace,
-                icon: Icon(Icons.restart_alt, size: 18),
-                label: Text('替换'),
-              ),
-              ButtonSegment(
-                value: ImportMode.merge,
-                icon: Icon(Icons.library_add_outlined, size: 18),
-                label: Text('合并'),
-              ),
-            ],
-            selected: {state.mode},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) => notifier.setMode(s.first),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(horizontal: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.secondaryContainer,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            state.mode == ImportMode.merge
-                ? '合并模式：保留现有课表，追加所选课程。'
-                : '替换模式：所选课程将替换当前学期的原有课表。',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSecondaryContainer,
-            ),
-          ),
+        ImportModeSelector(
+          mode: state.mode,
+          onChanged: notifier.setMode,
         ),
         if (state.diagnostics.isNotEmpty)
           ImportDiagnosticsCard(diagnostics: state.diagnostics),
@@ -266,30 +232,6 @@ class _PreviewList extends ConsumerWidget {
         ),
       ],
     );
-  }
-
-  /// 返回存在时间冲突的已选课程名称集合（内部冲突 + 与现有课表冲突）。
-  Set<String> _conflictNames(
-    ImportState state,
-    List<Course> existingCourses,
-  ) {
-    final selected = state.courses.where((c) => c.selected).toList();
-    final names = <String>{};
-    for (var i = 0; i < selected.length; i++) {
-      for (var j = i + 1; j < selected.length; j++) {
-        if (coursesConflict(selected[i], selected[j])) {
-          names
-            ..add(selected[i].name)
-            ..add(selected[j].name);
-        }
-      }
-      for (final e in existingCourses) {
-        if (conflictsWithCourse(selected[i], e)) {
-          names.add(selected[i].name);
-        }
-      }
-    }
-    return names;
   }
 }
 

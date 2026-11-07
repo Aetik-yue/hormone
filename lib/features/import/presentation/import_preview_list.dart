@@ -82,6 +82,65 @@ class ImportPreviewList extends StatelessWidget {
   }
 }
 
+/// 导入模式选择与说明（替换/合并），文件导入与 WebView 教务导入共用。
+class ImportModeSelector extends StatelessWidget {
+  final ImportMode mode;
+  final ValueChanged<ImportMode> onChanged;
+
+  const ImportModeSelector({
+    super.key,
+    required this.mode,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SegmentedButton<ImportMode>(
+            segments: const [
+              ButtonSegment(
+                value: ImportMode.replace,
+                icon: Icon(Icons.restart_alt, size: 18),
+                label: Text('替换'),
+              ),
+              ButtonSegment(
+                value: ImportMode.merge,
+                icon: Icon(Icons.library_add_outlined, size: 18),
+                label: Text('合并'),
+              ),
+            ],
+            selected: {mode},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => onChanged(s.first),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            mode == ImportMode.merge
+                ? '合并模式：保留现有课表，追加所选课程。'
+                : '替换模式：所选课程将替换当前学期的原有课表。',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// 顶部的时间冲突提示条。传入冲突的课程名称集合，可为空（不显示）。
 class ImportConflictBanner extends StatelessWidget {
   final Set<String> names;
