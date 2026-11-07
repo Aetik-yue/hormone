@@ -48,7 +48,10 @@ void main() {
         );
     router = GoRouter(
       routes: [
-        GoRoute(path: '/', builder: (_, __) => const ScheduleScreen()),
+        GoRoute(
+          path: '/',
+          builder: (_, __) => ScheduleScreen(now: () => today),
+        ),
         GoRoute(
           path: '/semester',
           builder: (_, __) => SemesterScreen(now: () => today),

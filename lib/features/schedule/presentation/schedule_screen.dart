@@ -16,7 +16,9 @@ import 'week_view.dart';
 
 /// 课程表主页：日期 + 查看周标题（点开为周操作菜单）+ 可左右滑动的周视图。
 class ScheduleScreen extends ConsumerStatefulWidget {
-  const ScheduleScreen({super.key});
+  const ScheduleScreen({super.key, this.now});
+
+  final DateTime Function()? now;
 
   @override
   ConsumerState<ScheduleScreen> createState() => _ScheduleScreenState();
@@ -43,7 +45,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   Widget build(BuildContext context) {
     final semester = ref.watch(activeSemesterProvider).valueOrNull;
     final totalWeeks = semester?.totalWeeks ?? 18;
-    final now = DateTime.now();
+    final now = (widget.now ?? DateTime.now)();
     // 开学前或学期已结束时没有可翻到的「本周」，不显示后缀与「回到本周」。
     final currentWeek = semester == null ? null : teachingWeekOf(semester, now);
     final theme = Theme.of(context);
@@ -404,7 +406,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     final courses =
         ref.read(scheduleCoursesProvider).value ?? const <Course>[];
     final sectionTimes = ref.read(sectionTimesProvider);
-    final now = DateTime.now();
+    final now = (widget.now ?? DateTime.now)();
     final currentWeek = semester == null ? null : teachingWeekOf(semester, now);
     final beforeStart = semester == null || currentWeekOf(semester, now) < 1;
     final slots = currentWeek == null
