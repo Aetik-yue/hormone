@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'support/node_extractor.dart';
 import 'package:recess/features/import/data/ncu_adapter.dart';
 import 'package:recess/features/import/data/school_adapter.dart';
 
@@ -149,7 +150,7 @@ void main() {
   });
 
   test('接口与 DOM 均无课程时点击学生个人课表入口', () async {
-    final result = await _runExtractorRaw(r'''
+    final (result, clicked) = await runAdapterExtractorProbe(adapter, r'''
       global.window = {};
       const link = {
         textContent: '学生个人课表',
@@ -168,10 +169,97 @@ void main() {
         this.setRequestHeader = function() {};
         this.send = function() { this.status = 500; this.responseText = ''; };
       };
-    ''');
+    ''', probe: 'global.__clicked === true', tag: 'ncu_nav');
 
     expect(result, isA<Map<String, dynamic>>());
     expect(result['__nav'], isTrue);
+    expect(clicked, isTrue);
+  });
+
+  test('课表渲染在 iframe 内时同样能解析（遍历同源 frame）', () async {
+    final courses = await _runExtractor(r'''
+      global.window = {location: {
+        hostname: 'jwxt.ncu.edu.cn', pathname: '/student/course/schedule'
+      }};
+      const cell = {
+        innerText: '高等数学\n周一第1-2节{第1-16周}\nA-201',
+        textContent: '高等数学\n周一第1-2节{第1-16周}\nA-201'
+      };
+      const iframeDoc = {querySelectorAll: function(selector) {
+        return selector.indexOf('td') >= 0 ? [cell] : [];
+      }};
+      const iframeEl = {contentDocument: iframeDoc};
+      global.document = {
+        querySelector: function() { return null; },
+        querySelectorAll: function(selector) {
+          if (selector.indexOf('frame') >= 0) return [iframeEl];
+          return [];
+        }
+      };
+      global.XMLHttpRequest = function() {
+        throw new Error('新平台不应请求旧强智接口');
+      };
+    ''');
+
+    expect(courses, hasLength(1));
+    expect(courses.single['name'], '高等数学');
+    expect(courses.single['location'], 'A-201');
+    expect(courses.single['dayOfWeek'], 1);
+    expect(courses.single['startSection'], 1);
+    expect(courses.single['endSection'], 2);
+    expect(courses.single['weeks'], List<int>.generate(16, (i) => i + 1));
+  });
+
+  test('课表容器存在但未渲染出课程时返回 __pending', () async {
+    final result = await _runExtractorRaw(r'''
+      global.window = {location: {
+        hostname: 'jwxt.ncu.edu.cn', pathname: '/student/course/schedule'
+      }};
+      const container = {querySelectorAll: function() { return []; }};
+      global.document = {
+        body: {innerText: '', querySelectorAll: function() { return []; }},
+        querySelector: function(selector) {
+          return selector.indexOf('#kbTable') >= 0 ? container : null;
+        },
+        querySelectorAll: function() { return []; }
+      };
+      global.XMLHttpRequest = function() {
+        throw new Error('新平台不应请求旧强智接口');
+      };
+    ''');
+
+    expect(result, isA<Map<String, dynamic>>());
+    expect(result['__pending'], isTrue);
+  });
+
+  test('同一课程不同教室按名称/星期/节次/周次去重，先出现者生效', () async {
+    final courses = await _runExtractor(r'''
+      global.window = {location: {
+        hostname: 'jwxt.ncu.edu.cn', pathname: '/student/course/schedule'
+      }};
+      function makeCell(sections, location) {
+        return {
+          innerText: '高等数学\n周一第' + sections + '节{第1-16周}\n' + location,
+          textContent: '高等数学\n周一第' + sections + '节{第1-16周}\n' + location
+        };
+      }
+      const first = makeCell('1-2', 'A-201');
+      const second = makeCell('1-2', 'B-302');
+      const third = makeCell('3-4', 'C-403');
+      global.document = {
+        querySelector: function() { return null; },
+        querySelectorAll: function(selector) {
+          if (selector.indexOf('frame') >= 0) return [];
+          return selector.indexOf('td') >= 0 ? [first, second, third] : [];
+        }
+      };
+      global.XMLHttpRequest = function() {
+        throw new Error('新平台不应请求旧强智接口');
+      };
+    ''');
+
+    expect(courses, hasLength(2));
+    expect(courses.map((c) => c['location']), ['A-201', 'C-403']);
   });
 }
 

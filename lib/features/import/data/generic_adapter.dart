@@ -1,4 +1,4 @@
-import 'school_week_parser.dart';
+import 'school_extraction_runtime.dart';
 import 'school_adapter.dart';
 
 /// 通用教务系统适配器。
@@ -39,9 +39,8 @@ class GenericAdapter extends SchoolAdapter {
   /// 可供按学校配置的适配器复用的通用 DOM 抽取脚本。
   static final String commonExtractJs = r'''
 (function() {
-''' + schoolWeekParserJs + r'''
+''' + schoolExtractionRuntimeJs + r'''
   var results = [];
-  var dayMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7};
   var seen = {};
 
   // ═══ 找课表容器 ═══
@@ -112,18 +111,8 @@ class GenericAdapter extends SchoolAdapter {
         if (!parsed.name) return;
 
         var key = parsed.name + '|' + day + '|' + beginUnit + '|' + (parsed.location || '') + '|' + parsed.weeks.join(',');
-        if (seen[key]) return;
-        seen[key] = true;
-
-        results.push({
-          name: parsed.name,
-          teacher: parsed.teacher || null,
-          location: parsed.location || null,
-          dayOfWeek: day,
-          startSection: beginUnit,
-          endSection: endUnit,
-          weeks: parsed.weeks
-        });
+        schoolPushCourse(results, seen, key, parsed.name, parsed.teacher,
+            parsed.location, day, [beginUnit, endUnit], parsed.weeks);
       });
     });
   }
@@ -161,7 +150,7 @@ class GenericAdapter extends SchoolAdapter {
     for (var r = headerIndex + 1; r < grid.length; r++) {
       if (!grid[r]) continue;
       var sectionCell = grid[r][0];
-      var sectionValues = parseRange(sectionCell ? sectionCell.text : '');
+      var sectionValues = schoolParseSections(sectionCell ? sectionCell.text : '');
       var sectionNum = sectionValues.length > 0 ? sectionValues[0] : r - headerIndex;
 
       var columnKeys = Object.keys(dayColumns);
@@ -181,18 +170,8 @@ class GenericAdapter extends SchoolAdapter {
             : sectionNum + cell.rowspan - 1;
 
         var key = parsed.name + '|' + dayIdx + '|' + sectionNum + '|' + (parsed.location || '') + '|' + parsed.weeks.join(',');
-        if (seen[key]) continue;
-        seen[key] = true;
-
-        results.push({
-          name: parsed.name,
-          teacher: parsed.teacher || null,
-          location: parsed.location || null,
-          dayOfWeek: dayIdx,
-          startSection: sectionNum,
-          endSection: endSection,
-          weeks: parsed.weeks
-        });
+        schoolPushCourse(results, seen, key, parsed.name, parsed.teacher,
+            parsed.location, dayIdx, [sectionNum, endSection], parsed.weeks);
       }
     }
   }
@@ -208,7 +187,7 @@ class GenericAdapter extends SchoolAdapter {
 
       // 检测星期标记
       var dm = line.match(/^周([一二三四五六日天])$/) || line.match(/^星期([一二三四五六日天])$/);
-      if (dm && dayMap[dm[1]]) { currentDay = dayMap[dm[1]]; continue; }
+      if (dm && schoolDayMap[dm[1]]) { currentDay = schoolDayMap[dm[1]]; continue; }
 
 
       // 尝试从行中提取课程名+周次+节次
@@ -216,8 +195,8 @@ class GenericAdapter extends SchoolAdapter {
       var courseMatch = line.match(/^(.{2,20}?)\s+(.+?周(?:\s*[（(][单双奇偶]周?[)）])?)\s+([^周\n]*?)\s*节/);
       if (courseMatch) {
         var cname = courseMatch[1].trim();
-        var wks = parseWeeks(courseMatch[2]);
-        var secs = parseRange(courseMatch[3]);
+        var wks = schoolParseWeeks(courseMatch[2]);
+        var secs = schoolParseSections(courseMatch[3]);
         var startSec = secs[0];
         var endSec = secs[secs.length - 1];
 
@@ -227,18 +206,8 @@ class GenericAdapter extends SchoolAdapter {
         if (loc && loc.length > 30) loc = null;
 
         var key = cname + '|' + currentDay + '|' + startSec + '|' + (loc || '') + '|' + wks.join(',');
-        if (seen[key]) continue;
-        seen[key] = true;
-
-        results.push({
-          name: cname,
-          teacher: null,
-          location: loc,
-          dayOfWeek: currentDay,
-          startSection: startSec,
-          endSection: endSec,
-          weeks: wks
-        });
+        schoolPushCourse(results, seen, key, cname, null, loc, currentDay,
+            [startSec, endSec], wks);
       }
     }
   }
@@ -250,7 +219,7 @@ class GenericAdapter extends SchoolAdapter {
   function parseDay(value) {
     var text = String(value || '').trim();
     var match = text.match(/(?:周|星期)?([一二三四五六日天])/);
-    if (match && dayMap[match[1]]) return dayMap[match[1]];
+    if (match && schoolDayMap[match[1]]) return schoolDayMap[match[1]];
     var number = schoolInteger(text);
     if (number >= 1 && number <= 7) return number;
     // 明确写出 0 时才按 0-indexed 处理，避免空字符串被误判为周一。
@@ -316,7 +285,7 @@ class GenericAdapter extends SchoolAdapter {
       for (var li = 1; li < lines.length; li++) {
         if (/\d+.*周/.test(lines[li]) || /单周/.test(lines[li]) || /双周/.test(lines[li])) {
           weeksText = lines[li];
-          weeks = parseWeeks(weeksText);
+          weeks = schoolParseWeeks(weeksText);
           break;
         }
       }
@@ -344,20 +313,12 @@ class GenericAdapter extends SchoolAdapter {
       }
     }
 
-    if (lines.length === 1) weeks = parseWeeks(weekParts.join(' '));
+    if (lines.length === 1) weeks = schoolParseWeeks(weekParts.join(' '));
 
     // 清理课程名中的括号备注
     if (name) name = name.replace(/\([^)]*\)$/g, '').replace(/（[^）]*）$/g, '').trim();
 
     return { name: name, weeks: weeks, teacher: teacher, location: location };
-  }
-
-  function parseWeeks(text) {
-    return schoolWeekNumbers(text);
-  }
-
-  function parseRange(text) {
-    return schoolWeekNumbers(text, true);
   }
 })();
 ''';

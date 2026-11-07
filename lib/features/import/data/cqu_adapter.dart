@@ -1,4 +1,4 @@
-import 'school_week_parser.dart';
+import 'school_extraction_runtime.dart';
 import 'school_adapter.dart';
 
 /// 重庆大学（金智教务 XCampus）适配器。
@@ -29,9 +29,8 @@ class CquAdapter extends SchoolAdapter {
   @override
   String get extractJs => r'''
 (function() {
-''' + schoolWeekParserJs + r'''
+''' + schoolExtractionRuntimeJs + r'''
   var results = [];
-  var dayMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7};
   var _dayHeaders = null; // 日期表头缓存（闭包变量，每次提取刷新）
 
   // CQU 课表会把同一时间格内超出展示上限的课程折叠为
@@ -130,7 +129,7 @@ class CquAdapter extends SchoolAdapter {
     var secMatch = text.match(/\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，、]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*节\]/);
     var startSec = null, endSec = null;
     if (secMatch) {
-      var secs = parseRange(secMatch[1]);
+      var secs = schoolParseSections(secMatch[1]);
       if (secs.length > 0) {
         startSec = secs[0];
         endSec = secs[secs.length - 1];
@@ -204,7 +203,7 @@ class CquAdapter extends SchoolAdapter {
 
       // 检测星期标记
       var dm = line.match(/^周([一二三四五六日天])$/) || line.match(/^星期([一二三四五六日天])$/);
-      if (dm && dayMap[dm[1]]) { currentDay = dayMap[dm[1]]; continue; }
+      if (dm && schoolDayMap[dm[1]]) { currentDay = schoolDayMap[dm[1]]; continue; }
 
       // 匹配课程编号行
       if (!/^\[\d{4,}-\d{2,}/.test(line)) continue;
@@ -226,7 +225,7 @@ class CquAdapter extends SchoolAdapter {
       var loc = locM ? locM[1].trim() : null;
 
       var wks = schoolWeekNumbers(wm ? wm[1] + (wm[2] || '') : null);
-      var scs = parseRange(sm ? sm[1] : null);
+      var scs = schoolParseSections(sm ? sm[1] : null);
 
       var key2 = nm + '|' + currentDay + '|' + (scs[0]||1) + '|' + wks.join(',');
       if (seen[key2]) { i += 2; continue; }
@@ -262,8 +261,9 @@ class CquAdapter extends SchoolAdapter {
     if (names.length === 0) return null;
     var info = rest.match(/^([^\[\]]*)\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，、]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*周\]\s*\[((?:\d+(?:\s*[-–~]\s*\d+)?)(?:\s*[,，、]\s*\d+(?:\s*[-–~]\s*\d+)?)*)\s*节\]\s*$/);
     if (!info) return null;
-    var weeks = parseRange(info[2]);
-    var sections = parseRange(info[3]);
+    // info[2] 是周次文本：按基线 parseRange 的语义解析（schoolParseSections 即其等价物），与 schoolParseWeeks 不同。
+    var weeks = schoolParseSections(info[2]);
+    var sections = schoolParseSections(info[3]);
     return {
       teacher: names.join('、'),
       weeks: weeks.join(','),
@@ -299,10 +299,6 @@ class CquAdapter extends SchoolAdapter {
     if (/[^\s;；\[\]]+-\d{4,}\[[^\[\]]+\]/.test(title)) return '';
     if (title.length < 2 || title.length > 200 || /^\[/.test(title)) return '';
     return title;
-  }
-
-  function parseRange(text) {
-    return schoolWeekNumbers(text, true);
   }
 
   function findCollapsedCourseTriggers() {
@@ -360,7 +356,7 @@ class CquAdapter extends SchoolAdapter {
         var n = schoolInteger(val);
         if (n >= 1 && n <= 7) { method1Result = n; method1Depth = d; break; }
         var dm2 = val.match(/([一二三四五六日天])/);
-        if (dm2 && dayMap[dm2[1]]) { method1Result = dayMap[dm2[1]]; method1Depth = d; break; }
+        if (dm2 && schoolDayMap[dm2[1]]) { method1Result = schoolDayMap[dm2[1]]; method1Depth = d; break; }
       }
       node = node.parentElement;
     }
@@ -378,7 +374,7 @@ class CquAdapter extends SchoolAdapter {
         if (t.length === 0 || t.length > 20) continue;
         // 放宽正则：允许"周一 09/02"、"周一(开学)"等格式
         var dm = t.match(/^周([一二三四五六日天])/) || t.match(/^星期([一二三四五六日天])/);
-        if (dm && dayMap[dm[1]]) {
+        if (dm && schoolDayMap[dm[1]]) {
           var rect = h.getBoundingClientRect();
           if (rect.width > 0 && rect.height > 0) {
             var x = rect.left + rect.width / 2;
@@ -392,7 +388,7 @@ class CquAdapter extends SchoolAdapter {
               if (Math.abs(_dayHeaders[j].x - x) < 2) { isDup = true; break; }
             }
             if (!isDup) {
-              _dayHeaders.push({ day: dayMap[dm[1]], x: x, inferred: false });
+              _dayHeaders.push({ day: schoolDayMap[dm[1]], x: x, inferred: false });
             }
           }
         }

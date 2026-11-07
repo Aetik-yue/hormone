@@ -1,4 +1,4 @@
-import 'school_week_parser.dart';
+import 'school_extraction_runtime.dart';
 import 'package:recess/features/import/data/school_adapter.dart';
 
 /// 井冈山大学（金智智慧校园 wisedu）适配器。
@@ -44,38 +44,15 @@ class JgsuAdapter extends SchoolAdapter {
   @override
   String get extractJs => r'''
 (function() {
-''' + schoolWeekParserJs + r'''
+''' + schoolExtractionRuntimeJs + r'''
   var results = [];
   var seen = {};
-  var dayMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7};
-
-  // ═══ 节次："1-2节" / "1,2" / "5" -> 排序去重后的节次数组 ═══
-  // 必须排序：乱序输入（"5,1-2"）若不排序会导致 startSection > endSection，
-  // release 构建下（assert 关闭）带着负高度进课表布局直接崩溃。
-  function parseSections(str) {
-    return schoolWeekNumbers(str, true);
-  }
-
-  // 周次文本："1-16周" / "1-8,11-16" / "1-15(单)" / "2-16(双)"
-  function parseWeeksText(t) {
-    return schoolWeekNumbers(t);
-  }
 
   function addResult(name, teacher, location, day, secs, weeks) {
 
     var key = name + '|' + day + '|' + secs.join(',') + '|' +
               (location || '') + '|' + weeks.join(',');
-    if (seen[key]) return;
-    seen[key] = true;
-    results.push({
-      name: String(name).trim(),
-      teacher: teacher || null,
-      location: location || null,
-      dayOfWeek: day,
-      startSection: secs[0],
-      endSection: secs[secs.length - 1],
-      weeks: weeks
-    });
+    schoolPushCourse(results, seen, key, name, teacher, location, day, secs, weeks);
   }
 
   // ═══ 策略1：jwapp 课表接口（登录态下同源 XHR 直调） ═══
@@ -121,15 +98,15 @@ class JgsuAdapter extends SchoolAdapter {
             var day = schoolInteger(it.xqj);
             if (isNaN(day) && it.xqjmc) {
               var dm = String(it.xqjmc).match(/周([一二三四五六日天])|星期([一二三四五六日天])/);
-              if (dm) day = dayMap[dm[1] || dm[2]];
+              if (dm) day = schoolDayMap[dm[1] || dm[2]];
             }
             addResult(
               String(it.kcmc || it.kcName || it.courseName || ''),
               it.xm || it.jsxm || it.teacherName || null,
               it.cdmc || it.jxcdmc || it.jxcd || null,
               day,
-              parseSections(String(it.jc || it.jcs || '')),
-              parseWeeksText(String(it.zcd || ''))
+              schoolParseSections(String(it.jc || it.jcs || '')),
+              schoolParseWeeks(String(it.zcd || ''))
             );
           }
           if (results.length > 0) return true;
@@ -171,16 +148,7 @@ class JgsuAdapter extends SchoolAdapter {
   }
 
   // ═══ 汇总主文档与所有同源 frame（课表应用可能嵌在 iframe 内） ═══
-  var docs = [document];
-  try {
-    var frames = document.querySelectorAll('frame, iframe');
-    for (var f = 0; f < frames.length; f++) {
-      try {
-        var fd = frames[f].contentDocument;
-        if (fd) docs.push(fd);
-      } catch (e) {}
-    }
-  } catch (e) {}
+  var docs = schoolCollectDocuments();
 
   // 1. 接口直连
   if (tryApi()) return JSON.stringify(results);
@@ -202,7 +170,7 @@ class JgsuAdapter extends SchoolAdapter {
                        cell.getAttribute('data-weekday') || '';
           var day = 0;
           var dm = String(rawDay).match(/(?:周|星期)?([一二三四五六日天])/);
-          if (dm && dayMap[dm[1]]) day = dayMap[dm[1]];
+          if (dm && schoolDayMap[dm[1]]) day = schoolDayMap[dm[1]];
           if (!day) {
             var num = schoolInteger(rawDay);
             if (num >= 1 && num <= 7) day = num;
@@ -226,7 +194,7 @@ class JgsuAdapter extends SchoolAdapter {
           for (var li = 1; li < lines.length; li++) {
             var ln = lines[li];
             if (!weeks.length && (/\d+.*周/.test(ln) || /单周/.test(ln) || /双周/.test(ln))) {
-              weeks = parseWeeksText(ln);
+              weeks = schoolParseWeeks(ln);
               continue;
             }
             if (!teacher && ln.length >= 2 && ln.length <= 10 && !/\d+周/.test(ln)) {
@@ -246,25 +214,15 @@ class JgsuAdapter extends SchoolAdapter {
   // 3. 找到课表入口 -> 模拟点击并让 Dart 侧延迟重试。
   //    两轮匹配：先命中 href 指向 wdkb 应用，再看文本含「课表」
   //    （兼容「我的课表」「学生个人课表」等各种长度的入口名）。
-  for (var pass = 0; pass < 2; pass++) {
-    for (var d2 = 0; d2 < docs.length; d2++) {
-      var doc2 = docs[d2];
-      if (!doc2 || !doc2.querySelectorAll) continue;
-      var links = doc2.querySelectorAll('a, [onclick]');
-      for (var l = 0; l < links.length; l++) {
-        var el = links[l];
-        var t = (el.textContent || el.getAttribute('title') || '').trim();
-        var href = el.getAttribute ? (el.getAttribute('href') || '') : '';
-        var match = pass === 0
-            ? (href && href.indexOf('wdkb') >= 0)
-            : (t.indexOf('课表') >= 0 || href.indexOf('kbcx') >= 0);
-        if (match) {
-          try { el.click(); } catch (e) {}
-          return JSON.stringify({ __nav: true });
-        }
-      }
-    }
-  }
+  var nav = schoolClickEntry(docs, 'a, [onclick]', function(el) {
+    var href = el.getAttribute ? (el.getAttribute('href') || '') : '';
+    return !!(href && href.indexOf('wdkb') >= 0);
+  }) || schoolClickEntry(docs, 'a, [onclick]', function(el) {
+    var text = (el.textContent || el.getAttribute('title') || '').trim();
+    var href = el.getAttribute ? (el.getAttribute('href') || '') : '';
+    return text.indexOf('课表') >= 0 || href.indexOf('kbcx') >= 0;
+  });
+  if (nav) return nav;
 
   return JSON.stringify(results);
 })();

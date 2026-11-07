@@ -1,4 +1,4 @@
-import 'school_week_parser.dart';
+import 'school_extraction_runtime.dart';
 import 'school_adapter.dart';
 
 /// 江西财经大学教务管理系统专用适配器。
@@ -26,10 +26,9 @@ class JufeAdapter extends SchoolAdapter {
   @override
   String get extractJs => r'''
 (function() {
-''' + schoolWeekParserJs + r'''
+''' + schoolExtractionRuntimeJs + r'''
   var results = [];
   var seen = {};
-  var dayMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7};
 
   function attr(el, names) {
     if (!el || !el.getAttribute) return '';
@@ -38,10 +37,6 @@ class JufeAdapter extends SchoolAdapter {
       if (value !== null && value !== '') return value;
     }
     return '';
-  }
-
-  function parseWeeks(text) {
-    return schoolWeekNumbers(text);
   }
 
   function parseSections(text) {
@@ -60,7 +55,7 @@ class JufeAdapter extends SchoolAdapter {
     }
     var match = String(text || '').match(
         /周([一二三四五六日天])|星期([一二三四五六日天])/);
-    return match ? dayMap[match[1] || match[2]] : 0;
+    return match ? schoolDayMap[match[1] || match[2]] : 0;
   }
 
   function parseCellText(text) {
@@ -80,7 +75,7 @@ class JufeAdapter extends SchoolAdapter {
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
       if (/\d+.*周|单周|双周|奇周|偶周/.test(line)) {
-        weeks = parseWeeks(line);
+        weeks = schoolParseWeeks(line);
       } else if (/^(任课)?教师[：:]/.test(line)) {
         teacher = line.replace(/^(任课)?教师[：:]\s*/, '') || null;
       } else if (/^(上课)?(地点|教室)[：:]/.test(line)) {
@@ -108,17 +103,8 @@ class JufeAdapter extends SchoolAdapter {
 
     var key = parsed.name + '|' + day + '|' + start + '|' + end + '|' +
         (parsed.location || '') + '|' + parsed.weeks.join(',');
-    if (seen[key]) return;
-    seen[key] = true;
-    results.push({
-      name: parsed.name,
-      teacher: parsed.teacher || null,
-      location: parsed.location || null,
-      dayOfWeek: day,
-      startSection: start,
-      endSection: end,
-      weeks: parsed.weeks
-    });
+    schoolPushCourse(results, seen, key, parsed.name, parsed.teacher,
+        parsed.location, day, [start, end], parsed.weeks);
   }
 
   function findTable(doc) {
@@ -208,14 +194,7 @@ class JufeAdapter extends SchoolAdapter {
   }
 
   // 主文档和同源 iframe 都参与解析。
-  var docs = [document];
-  var frames = document.querySelectorAll
-      ? document.querySelectorAll('frame, iframe') : [];
-  for (var f = 0; f < frames.length; f++) {
-    try {
-      if (frames[f].contentDocument) docs.push(frames[f].contentDocument);
-    } catch (_) {}
-  }
+  var docs = schoolCollectDocuments();
   for (var d = 0; d < docs.length; d++) {
     var table = findTable(docs[d]);
     if (table) parseTable(table);
@@ -223,26 +202,18 @@ class JufeAdapter extends SchoolAdapter {
   if (results.length > 0) return JSON.stringify(results);
 
   // 页面已经出现课表容器但课程仍在异步渲染时，通知宿主稍后重试。
-  for (var p = 0; p < docs.length; p++) {
-    if (findTable(docs[p])) return JSON.stringify({__pending:true});
-  }
+  if (schoolAnyDoc(docs, findTable)) return JSON.stringify({__pending:true});
 
   // 官方指引中的入口名称：公共查询 / 网上选课 → 课程安排明细。
-  for (var n = 0; n < docs.length; n++) {
-    var links = docs[n].querySelectorAll
-        ? docs[n].querySelectorAll('a, [role="menuitem"], .menu-item, .el-menu-item')
-        : [];
-    for (var l = 0; l < links.length; l++) {
-      var text = ((links[l].textContent || '') + ' ' +
-          (attr(links[l], ['title']) || '')).trim();
-      var href = attr(links[l], ['href']);
-      if (/课程安排明细|学生个人课表|个人课表|我的课表/.test(text) ||
-          /xskbcx|kbcx|course.?schedule|course.?arrange/i.test(href)) {
-        try { links[l].click(); } catch (_) {}
-        return JSON.stringify({__nav:true});
-      }
-    }
-  }
+  var nav = schoolClickEntry(docs,
+      'a, [role="menuitem"], .menu-item, .el-menu-item', function(link) {
+    var text = ((link.textContent || '') + ' ' +
+        (attr(link, ['title']) || '')).trim();
+    var href = attr(link, ['href']);
+    return /课程安排明细|学生个人课表|个人课表|我的课表/.test(text) ||
+        /xskbcx|kbcx|course.?schedule|course.?arrange/i.test(href);
+  });
+  if (nav) return nav;
 
   return JSON.stringify([]);
 })();

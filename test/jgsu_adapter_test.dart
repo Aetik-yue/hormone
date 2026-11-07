@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'support/node_extractor.dart';
 import 'package:recess/features/import/data/jgsu_adapter.dart';
 
 void main() {
@@ -209,7 +210,8 @@ void main() {
 
   group('策略3：__nav 入口点击', () {
     test('长文本入口「学生个人课表」也能触发点击跳转', () async {
-      final result = await _runExtractorRaw(r'''
+      final (result, clicked) = await runAdapterExtractorProbe(adapter, '''
+        $_mockHelpers
         global.XMLHttpRequest = _xhrAlways(500, '');
         global.document = { querySelectorAll: function(sel) {
           if (sel.indexOf('frame') >= 0) return [];
@@ -223,9 +225,11 @@ void main() {
           }];
           return [];
         } };
-      ''');
+      ''', probe: 'global.__clicked === true', tag: 'jgsu_nav');
+
       expect(result, isA<Map<String, dynamic>>());
       expect(result['__nav'], isTrue);
+      expect(clicked, isTrue);
     });
 
     test('href 指向 wdkb 应用时优先点击（第一轮匹配）', () async {
@@ -247,6 +251,39 @@ void main() {
       expect(result, isA<Map<String, dynamic>>());
       expect(result['__nav'], isTrue);
     });
+  });
+
+  test('相同课程单元格按名称/星期/节次/教室/周次去重，教室不同则分别保留', () async {
+    final courses = await _runExtractor(r'''
+      global.XMLHttpRequest = _xhrAlways(500, '');
+      function makeCell(location) {
+        return {
+          innerText: '高等数学\n1-16周\n张老师\n' + location,
+          getAttribute: function(name) {
+            if (name === 'data-week') return '2';
+            if (name === 'data-begin-unit') return '3';
+            if (name === 'data-end-unit') return '4';
+            return null;
+          },
+          querySelectorAll: function() { return []; }
+        };
+      }
+      const row = { querySelectorAll: function(sel) {
+        return sel.indexOf('td') >= 0
+            ? [makeCell('教A-201'), makeCell('教A-201'), makeCell('教B-302')]
+            : [];
+      } };
+      const container = { querySelectorAll: function(sel) {
+        return sel.indexOf('tr') >= 0 ? [row] : [];
+      } };
+      global.document = { querySelectorAll: function(sel) {
+        if (sel.indexOf('frame') >= 0) return [];
+        if (sel.indexOf('#kbTable') >= 0) return [container];
+        return [];
+      } };
+    ''');
+    expect(courses, hasLength(2));
+    expect(courses.map((c) => c['location']), ['教A-201', '教B-302']);
   });
 
   test('无课程且无入口时返回空数组', () async {

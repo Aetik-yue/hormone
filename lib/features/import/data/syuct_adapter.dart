@@ -1,4 +1,4 @@
-import 'school_week_parser.dart';
+import 'school_extraction_runtime.dart';
 import 'school_adapter.dart';
 
 /// 沈阳化工大学（正方教务管理系统 ZFSoft）适配器。
@@ -30,19 +30,7 @@ class SyuctAdapter extends SchoolAdapter {
   @override
   String get extractJs => r'''
 (function() {
-''' + schoolWeekParserJs + r'''
-  var dayMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7};
-
-  // ═══ 解析周次文本（如 "第1-16周"、"第1-8周|单周"、"第2-16周|双周"、"第1-2周,第5-16周"）═══
-  function parseWeeks(t) {
-    return schoolWeekNumbers(t);
-  }
-
-  // ═══ 解析节次文本（如 "1,2"、"3"、"1-2"）═══
-  function parseSections(str) {
-    return schoolWeekNumbers(str, true);
-  }
-
+''' + schoolExtractionRuntimeJs + r'''
   // ═══ 解析单个文档中的课表 ═══
   function parseDoc(doc) {
     var out = [];
@@ -61,11 +49,11 @@ class SyuctAdapter extends SchoolAdapter {
         var block = blocks[b];
         var m = block.match(/周([一二三四五六日天])\s*第\s*([^\n{}]*?)\s*节\s*\{第\s*([^}]+)\}/);
         if (!m) continue;
-        var day = dayMap[m[1]];
+        var day = schoolDayMap[m[1]];
         if (!day) continue;
-        var secs = parseSections(m[2]);
+        var secs = schoolParseSections(m[2]);
         if (secs.length === 0) continue;
-        var weeks = parseWeeks(m[3]);
+        var weeks = schoolParseWeeks(m[3]);
         var lines = block.split(/\n/).map(function(l) { return l.trim(); }).filter(Boolean);
         // 模式行在块内的索引
         var modeIdx = -1;
@@ -105,31 +93,15 @@ class SyuctAdapter extends SchoolAdapter {
         name = name.replace(/\(\d{4}[^)]*\)\s*$/, '').trim();
         var key = name + '|' + day + '|' + secs[0] + '|' +
             secs[secs.length - 1] + '|' + weeks.join(',');
-        if (seen[key]) continue;
-        seen[key] = true;
-        out.push({
-          name: name,
-          teacher: teacher,
-          location: location,
-          dayOfWeek: day,
-          startSection: secs[0],
-          endSection: secs[secs.length - 1],
-          weeks: weeks
-        });
+        schoolPushCourse(out, seen, key, name, teacher, location, day,
+            secs, weeks);
       }
     }
     return out;
   }
 
   // ═══ 汇总主文档与所有同源 frame 的文档 ═══
-  var docs = [document];
-  var frames = document.querySelectorAll('frame, iframe');
-  for (var f = 0; f < frames.length; f++) {
-    try {
-      var fd = frames[f].contentDocument;
-      if (fd) { docs.push(fd); }
-    } catch (e) {}
-  }
+  var docs = schoolCollectDocuments();
 
   // 1. 已有课表（主文档或任一 frame）→ 直接解析
   for (var i = 0; i < docs.length; i++) {
@@ -138,31 +110,17 @@ class SyuctAdapter extends SchoolAdapter {
   }
 
   // 2. 检测到课表容器但暂无课程（页面加载中 / 本学期无课）→ 等待重试
-  for (var i = 0; i < docs.length; i++) {
-    if (docs[i].getElementById && docs[i].getElementById('Table1')) {
-      return JSON.stringify({ __pending: true });
-    }
-  }
+  if (schoolAnyDoc(docs, function(doc) {
+    return doc.getElementById && doc.getElementById('Table1');
+  })) return JSON.stringify({ __pending: true });
 
   // 3. 找到「学生个人课表」链接 → 模拟点击（浏览器按 target 在对应 frame 打开）
-  for (var i = 0; i < docs.length; i++) {
-    var links = docs[i].querySelectorAll
-        ? docs[i].querySelectorAll('a[href*="xskbcx.aspx"], a[href*="xskbcx"]')
-        : [];
-    var fallback = null;
-    for (var j = 0; j < links.length; j++) {
-      var t = (links[j].textContent || '').trim();
-      if (t.indexOf('个人课表') >= 0 || t.indexOf('学生课表') >= 0) {
-        try { links[j].click(); } catch (e) {}
-        return JSON.stringify({ __nav: true });
-      }
-      if (!fallback) fallback = links[j];
-    }
-    if (fallback) {
-      try { fallback.click(); } catch (e) {}
-      return JSON.stringify({ __nav: true });
-    }
-  }
+  var nav = schoolClickEntry(docs,
+      'a[href*="xskbcx.aspx"], a[href*="xskbcx"]', function(link) {
+    var t = (link.textContent || '').trim();
+    return t.indexOf('个人课表') >= 0 || t.indexOf('学生课表') >= 0;
+  }, true);
+  if (nav) return nav;
 
   return JSON.stringify([]);
 })();

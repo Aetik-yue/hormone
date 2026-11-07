@@ -1,4 +1,4 @@
-import 'school_week_parser.dart';
+import 'school_extraction_runtime.dart';
 import 'generic_adapter.dart';
 import 'school_adapter.dart';
 
@@ -31,20 +31,9 @@ class NcuAdapter extends SchoolAdapter {
   String get extractJs =>
       r'''
 (function() {
-''' + schoolWeekParserJs + r'''
+''' + schoolExtractionRuntimeJs + r'''
   var results = [];
   var seen = {};
-  var dayMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7};
-
-  // ═══ 节次解析："1-2" / "1,2" / "3" ═══
-  function parseSections(str) {
-    return schoolWeekNumbers(str, true);
-  }
-
-  // ═══ 周次解析："1-16周" / "1-16" / "1-8,11-16" / "1-15(单)" / "2-16(双)" ═══
-  function parseWeeksText(t) {
-    return schoolWeekNumbers(t);
-  }
 
   function addResult(name, teacher, location, day, secs, weeks) {
 
@@ -54,17 +43,7 @@ class NcuAdapter extends SchoolAdapter {
 
     var key = name + '|' + day + '|' + secs[0] + '|' +
         secs[secs.length - 1] + '|' + weeks.join(',');
-    if (seen[key]) return;
-    seen[key] = true;
-    results.push({
-      name: name,
-      teacher: teacher,
-      location: location,
-      dayOfWeek: day,
-      startSection: secs[0],
-      endSection: secs[secs.length - 1],
-      weeks: weeks
-    });
+    schoolPushCourse(results, seen, key, name, teacher, location, day, secs, weeks);
   }
 
   // ═══ 策略1：同步 XHR 直调课表数据接口 ═══
@@ -116,11 +95,11 @@ class NcuAdapter extends SchoolAdapter {
             if (isNaN(day) && (it.xqjmc || it.weekDayName)) {
               var dm = String(it.xqjmc || it.weekDayName)
                   .match(/周([一二三四五六日天])|星期([一二三四五六日天])/);
-              if (dm) day = dayMap[dm[1] || dm[2]];
+              if (dm) day = schoolDayMap[dm[1] || dm[2]];
             }
-            var secs = parseSections(String(
+            var secs = schoolParseSections(String(
                 it.jcs || it.jc || it.sections || ''));
-            var weeks = parseWeeksText(String(
+            var weeks = schoolParseWeeks(String(
                 it.zcd || it.zc || it.weeks || it.weekDescription || ''));
             addResult(
               String(it.kcmc || it.courseName || it.name || ''),
@@ -150,15 +129,15 @@ class NcuAdapter extends SchoolAdapter {
         var day = 0, secs = null, weeks = null;
         var m1 = line.match(/周([一二三四五六日天])\s*第\s*([\d,，、\s\-–~]+?)\s*节\s*\{第\s*([^}]+)\}/);
         if (m1) {
-          day = dayMap[m1[1]];
-          secs = parseSections(m1[2]);
-          weeks = parseWeeksText(m1[3]);
+          day = schoolDayMap[m1[1]];
+          secs = schoolParseSections(m1[2]);
+          weeks = schoolParseWeeks(m1[3]);
         } else {
           var m2 = line.match(/^([\d,，、\-–~\s]+?)\s*周\s*周([一二三四五六日天])\s*第\s*([\d,，、\s\-–~]+?)\s*节/);
           if (m2) {
-            day = dayMap[m2[2]];
-            secs = parseSections(m2[3]);
-            weeks = parseWeeksText(m2[1] + '周');
+            day = schoolDayMap[m2[2]];
+            secs = schoolParseSections(m2[3]);
+            weeks = schoolParseWeeks(m2[1] + '周');
           }
         }
         if (!day || !secs || secs.length === 0) continue;
@@ -191,14 +170,7 @@ class NcuAdapter extends SchoolAdapter {
   }
 
   // ═══ 汇总主文档与所有同源 frame ═══
-  var docs = [document];
-  var frames = document.querySelectorAll('frame, iframe');
-  for (var f = 0; f < frames.length; f++) {
-    try {
-      var fd = frames[f].contentDocument;
-      if (fd) { docs.push(fd); }
-    } catch (e) {}
-  }
+  var docs = schoolCollectDocuments();
 
   // 1. 旧强智系统接口直连；新平台不发送无意义的旧接口请求。
   var legacyLocation = !window.location ||
@@ -225,31 +197,21 @@ class NcuAdapter extends SchoolAdapter {
   } catch (e) {}
 
   // 4. 课表容器存在但暂无课程（加载中 / 本学期无课）→ 等待重试
-  for (var i = 0; i < docs.length; i++) {
-    if (docs[i].querySelector) {
-      var kb = docs[i].querySelector('#kbTable, .kb-table, #table1, table.kbTable, .el-table__body');
-      if (kb) return JSON.stringify({ __pending: true });
-    }
-  }
+  if (schoolAnyDoc(docs, function(doc) {
+    return doc.querySelector && doc.querySelector('#kbTable, .kb-table, #table1, table.kbTable, .el-table__body');
+  })) return JSON.stringify({ __pending: true });
 
   // 5. 找到课表菜单链接 → 模拟点击
-  for (var i = 0; i < docs.length; i++) {
-    var links = docs[i].querySelectorAll
-        ? docs[i].querySelectorAll(
-            'a, [role="menuitem"], .menu-item, .el-menu-item')
-        : [];
-    for (var j = 0; j < links.length; j++) {
-      var t = ((links[j].textContent || '') + ' ' +
-          ((links[j].getAttribute && links[j].getAttribute('title')) || '')).trim();
-      var href = (links[j].getAttribute && links[j].getAttribute('href')) ||
-          links[j].href || '';
-      if (/个人课表|我的课表|学生课表|课程表/.test(t) ||
-          /xskbcx|kbcx|wdkb|schedule|timetable/i.test(href)) {
-        try { links[j].click(); } catch (e) {}
-        return JSON.stringify({ __nav: true });
-      }
-    }
-  }
+  var nav = schoolClickEntry(docs,
+      'a, [role="menuitem"], .menu-item, .el-menu-item', function(link) {
+    var t = ((link.textContent || '') + ' ' +
+        ((link.getAttribute && link.getAttribute('title')) || '')).trim();
+    var href = (link.getAttribute && link.getAttribute('href')) ||
+        link.href || '';
+    return /个人课表|我的课表|学生课表|课程表/.test(t) ||
+        /xskbcx|kbcx|wdkb|schedule|timetable/i.test(href);
+  });
+  if (nav) return nav;
 
   return JSON.stringify([]);
 })();
