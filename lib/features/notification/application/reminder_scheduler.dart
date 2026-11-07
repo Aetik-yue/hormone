@@ -1,3 +1,4 @@
+import 'package:recess/core/constants/app_constants.dart';
 import 'package:recess/core/models/course.dart';
 import 'package:recess/core/models/semester.dart';
 import 'package:recess/core/utils/week_calculator.dart';
@@ -65,7 +66,7 @@ List<PendingReminder> computeReminders({
 
 String _body(Course course) {
   final day = course.dayOfWeek >= 1 && course.dayOfWeek <= 7
-      ? '周${_dayLabels[course.dayOfWeek - 1]}'
+      ? '周${AppConstants.weekdayLabels[course.dayOfWeek - 1]}'
       : '';
   final withLocation =
       course.location != null && course.location!.isNotEmpty
@@ -73,5 +74,3 @@ String _body(Course course) {
           : '';
   return '$day 第${course.startSection}-${course.endSection}节$withLocation';
 }
-
-const _dayLabels = ['一', '二', '三', '四', '五', '六', '日'];

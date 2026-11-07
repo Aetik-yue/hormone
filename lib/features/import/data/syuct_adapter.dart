@@ -23,9 +23,6 @@ class SyuctAdapter extends SchoolAdapter {
   String get loginUrl => 'https://jws.syuct.edu.cn/';
 
   @override
-  String get scheduleUrl => 'https://jws.syuct.edu.cn/xskbcx.aspx';
-
-  @override
   bool isSchedulePage(String currentUrl) {
     return currentUrl.contains('xskbcx.aspx');
   }
@@ -126,12 +123,11 @@ class SyuctAdapter extends SchoolAdapter {
 
   // ═══ 汇总主文档与所有同源 frame 的文档 ═══
   var docs = [document];
-  var wins = [window];
   var frames = document.querySelectorAll('frame, iframe');
   for (var f = 0; f < frames.length; f++) {
     try {
       var fd = frames[f].contentDocument;
-      if (fd) { docs.push(fd); wins.push(frames[f].contentWindow); }
+      if (fd) { docs.push(fd); }
     } catch (e) {}
   }
 

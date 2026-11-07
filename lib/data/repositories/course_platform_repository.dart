@@ -94,13 +94,6 @@ class CoursePlatformRepository {
     });
   }
 
-  /// 删除某学期的全部平台（删除学期时级联清理）。
-  Future<void> deleteBySemester(String semesterId) async {
-    await (_db.delete(_db.coursePlatforms)
-          ..where((p) => p.semesterId.equals(semesterId)))
-        .go();
-  }
-
   SimpleSelectStatement<db.$CoursePlatformsTable, db.CoursePlatform> _query(
     String semesterId,
     String courseName,

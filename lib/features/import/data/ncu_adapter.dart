@@ -19,10 +19,6 @@ class NcuAdapter extends SchoolAdapter {
   String get loginUrl => 'https://jwpt.ncu.edu.cn/jsxsd/sso.jsp';
 
   @override
-  String get scheduleUrl =>
-      'https://jwpt.ncu.edu.cn/jsxsd/kbcx/xskbcx_cxXsgg.html';
-
-  @override
   bool isSchedulePage(String currentUrl) {
     final url = currentUrl.toLowerCase();
     return url.contains('xskbcx') ||
@@ -196,12 +192,11 @@ class NcuAdapter extends SchoolAdapter {
 
   // ═══ 汇总主文档与所有同源 frame ═══
   var docs = [document];
-  var wins = [window];
   var frames = document.querySelectorAll('frame, iframe');
   for (var f = 0; f < frames.length; f++) {
     try {
       var fd = frames[f].contentDocument;
-      if (fd) { docs.push(fd); wins.push(frames[f].contentWindow); }
+      if (fd) { docs.push(fd); }
     } catch (e) {}
   }
 

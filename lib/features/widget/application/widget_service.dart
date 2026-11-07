@@ -12,11 +12,9 @@ import 'package:recess/features/settings/application/section_times_provider.dart
 
 /// Android 桌面小组件的 Dart 桥接层。
 ///
-/// 负责三件事：
-/// 1. 初始化 home_widget 与 Android SharedPreferences 的通信通道。
-/// 2. 预先算出「从今天到学期结束」的全部课次，连同逐日教学周映射一起
-///    写给原生侧，由原生侧按当前本地时间挑选今天还没结束的课次。
-/// 3. 处理小组件点击（默认仅拉起 App；如需深链可在原生侧回传 URI 后扩展）。
+/// 预先算出「从今天到学期结束」的全部课次，连同逐日教学周映射一起
+/// 写给原生侧，由原生侧按当前本地时间挑选今天还没结束的课次。
+/// 刷新由 main.dart 的 _AppEffects 集中触发。
 ///
 /// 写入的键：
 /// - `occurrences`：课次列表 JSON，按日期、开始时刻、开始节次排序。
@@ -42,24 +40,12 @@ class WidgetService {
 
   /// 注入的「现在」。生产环境使用系统时间，测试注入固定时刻。
   final DateTime Function() _now;
-  bool _initialized = false;
 
   /// 防抖定时器：课表数据变更时会连发多次流事件，合并为一次刷新。
   Timer? _debounce;
 
   WidgetService(this._ref, {DateTime Function()? now})
     : _now = now ?? DateTime.now;
-
-  /// 幂等初始化并注册小组件点击回调。
-  Future<void> _ensureInit() async {
-    if (_initialized) return;
-    _initialized = true;
-    // 冷启动时若由小组件拉起，initiallyLaunchedFromHomeWidget 是 Future；运行期点击则是 Stream。
-    HomeWidget.initiallyLaunchedFromHomeWidget()
-        .then(_onWidgetClicked)
-        .catchError((_) {});
-    HomeWidget.widgetClicked.listen(_onWidgetClicked);
-  }
 
   /// 课表/节次/当前周变化后集中触发的刷新入口。
   ///
@@ -77,7 +63,6 @@ class WidgetService {
   ///
   /// 失败时不抛出（小组件是加分项，不应影响主流程）。
   Future<void> updateWidget() async {
-    await _ensureInit();
     try {
       final semesterRepo = _ref.read(semesterRepositoryProvider);
       final semester = await semesterRepo.getActiveSemester();
@@ -170,11 +155,6 @@ class WidgetService {
       // 忽略：小组件刷新失败不影响主 App。
     }
   }
-
-  void _onWidgetClicked(Uri? uri) {
-    // MVP：点击小组件仅拉起 App。如需深链（如跳到某周），可在原生侧
-    // 通过 HomeWidget.updateWidget 回传 URI 后在此处理。
-  }
 }
 
 /// 预先算好的一条课次。同一门课在不同周次会产生不同的 [_Occurrence]。
@@ -252,7 +232,7 @@ String _formatDateTime(DateTime dateTime) =>
     '${dateTime.hour.toString().padLeft(2, '0')}:'
     '${dateTime.minute.toString().padLeft(2, '0')}';
 
-/// 全局单例 Provider，供任意位置（如导入完成后）触发小组件刷新。
+/// 全局单例 Provider，刷新由 main.dart 的 _AppEffects 集中触发。
 final widgetServiceProvider = Provider<WidgetService>((ref) {
   return WidgetService(ref);
 });

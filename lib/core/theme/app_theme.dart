@@ -22,8 +22,6 @@ class AppColors {
   static const textDark = Color(0xFFEDF2FC);
   static const textMutedDark = Color(0xFFA8B4C7);
 
-  static const success = Color(0xFF34B37E);
-
   /// 兼容已有课程默认色引用。
   static const primary = primaryLight;
 }

@@ -128,12 +128,6 @@ class CourseFormNotifier extends StateNotifier<Course> {
     state = state.copyWith(weeks: even);
   }
 
-  /// 选择指定范围。
-  void setWeekRange(int start, int end) {
-    final weeks = [for (var i = start; i <= end; i++) i];
-    state = state.copyWith(weeks: weeks);
-  }
-
   /// 反选周次。
   void invertWeeks(int maxWeek) {
     final current = {...state.weeks};

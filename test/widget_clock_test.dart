@@ -42,7 +42,6 @@ void main() {
     binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
       call,
     ) async {
-      if (call.method == 'initiallyLaunchedFromHomeWidget') return null;
       final arguments = call.arguments as Map;
       if (call.method == 'saveWidgetData') {
         saved[arguments['id'] as String] = arguments['data'];

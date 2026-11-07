@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'support/webview_parse_helper.dart';
 import 'package:recess/features/import/data/jufe_adapter.dart';
 import 'package:recess/features/import/data/school_adapter.dart';
-import 'package:recess/features/import/application/webview_import_provider.dart';
 
 void main() {
   final adapter = JufeAdapter();
@@ -12,7 +12,6 @@ void main() {
   test('使用江西财经大学当前教务入口并识别常见课表 URL', () {
     expect(adapter.schoolName, '江西财经大学');
     expect(adapter.loginUrl, 'http://xk.jxufe.edu.cn/');
-    expect(adapter.scheduleUrl, 'http://xk.jxufe.edu.cn/');
     expect(
       adapter.isSchedulePage(
         'http://xk.jxufe.edu.cn/student/course/schedule',
@@ -139,7 +138,7 @@ void main() {
         final records = await _runExtractor(
           _textSectionTable(section, dataSection: dataSection),
         );
-        final (courses, skipped) = importCoursesFromDecoded(records);
+        final (courses, skipped) = parseWebviewCourses(records);
         expect(courses, isEmpty, reason: section);
         expect(skipped, 1, reason: section);
       }
@@ -148,7 +147,7 @@ void main() {
 
   test('缺少节次 data 属性时仍可读取合法文本范围', () async {
     final records = await _runExtractor(_textSectionTable('第5-6节'));
-    final (courses, skipped) = importCoursesFromDecoded(records);
+    final (courses, skipped) = parseWebviewCourses(records);
     expect(skipped, 0);
     expect(courses.single.startSection, 5);
     expect(courses.single.endSection, 6);
@@ -156,7 +155,7 @@ void main() {
 
   test('现代结构的空 data 值仍作为坏记录诊断', () async {
     final records = await _runExtractor(_textSectionTable('第5-6节', day: ''));
-    final (courses, skipped) = importCoursesFromDecoded(records);
+    final (courses, skipped) = parseWebviewCourses(records);
     expect(courses, isEmpty);
     expect(skipped, 1);
   });

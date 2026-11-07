@@ -11,10 +11,6 @@ void main() {
     expect(adapter.schoolName, '井冈山大学');
     expect(adapter.loginUrl, 'https://ehall.jgsu.edu.cn/');
     expect(
-      adapter.scheduleUrl,
-      'https://ehall.jgsu.edu.cn/jwapp/sys/wdkb/index.do',
-    );
-    expect(
       adapter.isSchedulePage(
           'https://ehall.jgsu.edu.cn/jwapp/sys/wdkb/index.do'),
       isTrue,

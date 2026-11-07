@@ -77,16 +77,6 @@ void main() {
     });
   });
 
-  test('删除某学期的全部平台不影响其他学期', () async {
-    await platforms.replacePlatforms('s1', '操作系统', [xuexitong]);
-    await platforms.replacePlatforms('s2', '操作系统', [educoder]);
-
-    await platforms.deleteBySemester('s1');
-
-    expect(await platforms.getPlatforms('s1', '操作系统'), isEmpty);
-    expect(await platforms.getPlatforms('s2', '操作系统'), [educoder]);
-  });
-
   group('改名迁移', () {
     test('新名下没有平台时复制过去；旧名已无课程使用则删除旧名下的平台',
         () async {

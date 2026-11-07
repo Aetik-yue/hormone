@@ -14,9 +14,6 @@ class JufeAdapter extends SchoolAdapter {
   String get loginUrl => 'http://xk.jxufe.edu.cn/';
 
   @override
-  String get scheduleUrl => 'http://xk.jxufe.edu.cn/';
-
-  @override
   bool isSchedulePage(String currentUrl) {
     final url = currentUrl.toLowerCase();
     return url.contains('/course/schedule') ||

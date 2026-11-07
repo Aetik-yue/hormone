@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:recess/core/models/course.dart';
 import 'package:recess/core/models/course_platform.dart';
 import 'package:recess/core/models/semester.dart';
+import 'package:recess/core/utils/json_parsing.dart';
 import 'package:recess/data/app_database.dart' as db;
 import 'package:recess/data/mappers.dart';
 import 'package:recess/data/repositories/course_platform_repository.dart';
@@ -75,7 +76,7 @@ class BackupFile {
       }
       final name = s['name']?.toString() ?? '';
       final startDateRaw = s['startDate']?.toString();
-      final totalWeeks = _toInt(s['totalWeeks']);
+      final totalWeeks = toIntOrNull(s['totalWeeks']);
       if (startDateRaw == null || totalWeeks == null) {
         throw FormatException('学期「$name」缺少 startDate 或 totalWeeks');
       }
@@ -83,7 +84,7 @@ class BackupFile {
       if (startDate == null) {
         throw FormatException('学期「$name」的 startDate 非法');
       }
-      final override = _toInt(s['currentWeekOverride']);
+      final override = toIntOrNull(s['currentWeekOverride']);
       final sem = Semester(
         id: id,
         name: name,
@@ -107,9 +108,9 @@ class BackupFile {
           final cid = map['id']?.toString() ?? '';
           if (cid.isEmpty) continue; // 旧版导出无 id 的兜底：丢弃该条
           final cname = map['name']?.toString() ?? '';
-          final day = _toInt(map['dayOfWeek']);
-          final start = _toInt(map['startSection']);
-          final end = _toInt(map['endSection']);
+          final day = toIntOrNull(map['dayOfWeek']);
+          final start = toIntOrNull(map['startSection']);
+          final end = toIntOrNull(map['endSection']);
           if (cname.isEmpty || day == null || start == null || end == null) {
             continue;
           }
@@ -117,8 +118,8 @@ class BackupFile {
             id: cid,
             semesterId: id,
             name: cname,
-            teacher: _optString(map['teacher']),
-            location: _optString(map['location']),
+            teacher: toStringOrNull(map['teacher']),
+            location: toStringOrNull(map['location']),
             dayOfWeek: day,
             startSection: start,
             endSection: end,
@@ -126,9 +127,9 @@ class BackupFile {
             endTime: map['endTime']?.toString(),
             useExplicitTimes: map['useExplicitTimes'] as bool? ?? false,
             weeks: _weeks(map['weeks']),
-            colorValue: _toInt(map['colorValue']) ??
-                _parseColor(map['color']?.toString()),
-            notes: _optString(map['notes']),
+            colorValue: toIntOrNull(map['colorValue']) ??
+                parseHexColor(map['color']?.toString(), fallback: 0xFF5B8DEF),
+            notes: toStringOrNull(map['notes']),
           ));
         }
         coursesBySemester[id] = courses;
@@ -144,36 +145,15 @@ class BackupFile {
     );
   }
 
-  static int? _toInt(dynamic v) {
-    if (v is int) return v;
-    if (v is double) return v.toInt();
-    if (v is String) return int.tryParse(v);
-    return null;
-  }
-
-  static String? _optString(dynamic v) {
-    if (v == null) return null;
-    final s = v.toString().trim();
-    return s.isEmpty ? null : s;
-  }
-
   static List<int> _weeks(dynamic v) {
     if (v is! List) return const [];
     return v
-        .map((w) => _toInt(w))
+        .map(toIntOrNull)
         .whereType<int>()
         .where((w) => w >= 1)
         .toSet()
         .toList()
       ..sort();
-  }
-
-  static int _parseColor(String? s) {
-    if (s == null) return 0xFF5B8DEF;
-    var hex = s.replaceAll('#', '').replaceAll('0x', '').replaceAll('0X', '');
-    if (hex.length == 6) hex = 'FF$hex';
-    if (hex.length == 8) return int.tryParse(hex, radix: 16) ?? 0xFF5B8DEF;
-    return 0xFF5B8DEF;
   }
 }
 

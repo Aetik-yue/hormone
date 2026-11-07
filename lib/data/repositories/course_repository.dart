@@ -85,26 +85,7 @@ class CourseRepository {
     String semesterId,
     Iterable<Course> courses,
   ) async {
-    if (semesterId.isEmpty) {
-      throw ArgumentError.value(semesterId, 'semesterId', 'must not be empty');
-    }
-
-    final replacements = courses.toList(growable: false);
-    final ids = <String>{};
-    for (final course in replacements) {
-      if (course.id.isEmpty) {
-        throw ArgumentError('Course.id must not be empty');
-      }
-      if (course.semesterId != semesterId) {
-        throw ArgumentError(
-          'Course ${course.id} belongs to semester ${course.semesterId}, '
-          'not $semesterId',
-        );
-      }
-      if (!ids.add(course.id)) {
-        throw ArgumentError('Duplicate course id: ${course.id}');
-      }
-    }
+    final replacements = _validatedBatch(semesterId, courses);
 
     await _db.transaction(() async {
       await (_db.delete(_db.courses)
@@ -126,26 +107,7 @@ class CourseRepository {
   /// 与 [replaceForSemester] 不同：不删除现有课程，仅追加。id 必填且唯一，
   /// 校验失败抛 [ArgumentError] 且不写入任何数据。
   Future<void> addCourses(String semesterId, Iterable<Course> courses) async {
-    if (semesterId.isEmpty) {
-      throw ArgumentError.value(semesterId, 'semesterId', 'must not be empty');
-    }
-
-    final additions = courses.toList(growable: false);
-    final ids = <String>{};
-    for (final course in additions) {
-      if (course.id.isEmpty) {
-        throw ArgumentError('Course.id must not be empty');
-      }
-      if (course.semesterId != semesterId) {
-        throw ArgumentError(
-          'Course ${course.id} belongs to semester ${course.semesterId}, '
-          'not $semesterId',
-        );
-      }
-      if (!ids.add(course.id)) {
-        throw ArgumentError('Duplicate course id: ${course.id}');
-      }
-    }
+    final additions = _validatedBatch(semesterId, courses);
     if (additions.isEmpty) return;
     await _db.batch((batch) {
       batch.insertAll(
@@ -159,10 +121,28 @@ class CourseRepository {
     await (_db.delete(_db.courses)..where((c) => c.id.equals(id))).go();
   }
 
-  /// 删除某学期下全部课程（更换/删除学期时清理）。
-  Future<void> deleteBySemester(String semesterId) async {
-    await (_db.delete(_db.courses)
-          ..where((c) => c.semesterId.equals(semesterId)))
-        .go();
+  /// 批量写入前的统一校验：学期 id 非空、每门课程 id 非空且唯一、
+  /// 全部属于 [semesterId]。校验失败抛 [ArgumentError]，不写入任何数据。
+  List<Course> _validatedBatch(String semesterId, Iterable<Course> courses) {
+    if (semesterId.isEmpty) {
+      throw ArgumentError.value(semesterId, 'semesterId', 'must not be empty');
+    }
+    final list = courses.toList(growable: false);
+    final ids = <String>{};
+    for (final course in list) {
+      if (course.id.isEmpty) {
+        throw ArgumentError('Course.id must not be empty');
+      }
+      if (course.semesterId != semesterId) {
+        throw ArgumentError(
+          'Course ${course.id} belongs to semester ${course.semesterId}, '
+          'not $semesterId',
+        );
+      }
+      if (!ids.add(course.id)) {
+        throw ArgumentError('Duplicate course id: ${course.id}');
+      }
+    }
+    return list;
   }
 }

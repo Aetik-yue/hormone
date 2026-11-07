@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:recess/core/constants/app_constants.dart';
 import 'package:recess/core/models/course.dart';
 import 'package:recess/core/models/course_platform.dart';
+import 'package:recess/core/widgets/load_failed_view.dart';
 import 'package:recess/features/course/application/course_form_provider.dart';
 import 'package:recess/features/course/application/course_platforms_provider.dart';
 import 'package:recess/features/course/domain/unsaved_course_changes.dart';
@@ -12,16 +13,6 @@ import 'package:recess/features/course/presentation/course_platform_display.dart
 import 'package:recess/data/providers/database_providers.dart';
 import 'package:recess/features/semester/application/semester_providers.dart';
 import 'package:recess/features/settings/application/section_times_provider.dart';
-
-const List<String> _weekdayLabels = [
-  '周一',
-  '周二',
-  '周三',
-  '周四',
-  '周五',
-  '周六',
-  '周日'
-];
 
 class CourseEditScreen extends ConsumerStatefulWidget {
   final String? courseId;
@@ -73,7 +64,9 @@ class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
             loading: () => const Center(child: CircularProgressIndicator()),
             // 初始化失败：易懂说明 + 重试；重试按当前路由参数重新执行初始化，
             // 成功后仍走原有「仅初始化一次」的表单与课程平台流程。
-            error: (e, _) => _LoadFailedView(
+            error: (e, _) => LoadFailedView(
+              title: '课程加载失败',
+              message: '课程数据没有读取出来，点击重试重新加载',
               onRetry: () =>
                   ref.invalidate(courseInitialProvider(widget.courseId)),
             ),
@@ -184,45 +177,6 @@ class _CourseEditScreenState extends ConsumerState<CourseEditScreen> {
   }
 }
 
-/// 课程加载失败状态：易懂的说明加重试入口，不展示原始异常。
-class _LoadFailedView extends StatelessWidget {
-  final VoidCallback onRetry;
-  const _LoadFailedView({required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.cloud_off_outlined, size: 48, color: theme.hintColor),
-          const SizedBox(height: 12),
-          Text(
-            '课程加载失败',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.hintColor,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '课程数据没有读取出来，点击重试重新加载',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.hintColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('重试'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class CourseFormBody extends ConsumerStatefulWidget {
   final Course initial;
   final bool isEdit;
@@ -324,7 +278,7 @@ class _CourseFormBodyState extends ConsumerState<CourseFormBody> {
             final day = i + 1;
             final selected = course.dayOfWeek == day;
             return ChoiceChip(
-              label: Text(_weekdayLabels[i]),
+              label: Text('周${AppConstants.weekdayLabels[i]}'),
               selected: selected,
               onSelected: (_) =>
                   ref.read(courseFormProvider.notifier).setDayOfWeek(day),

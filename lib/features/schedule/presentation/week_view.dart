@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:recess/core/constants/app_constants.dart';
 import 'package:recess/core/models/course.dart';
 import 'package:recess/core/utils/week_calculator.dart';
+import 'package:recess/core/widgets/load_failed_view.dart';
 import 'package:recess/features/schedule/domain/schedule_helpers.dart';
 import 'package:recess/features/semester/application/semester_providers.dart';
 import 'package:recess/features/settings/application/section_times_provider.dart';
@@ -37,8 +38,6 @@ class WeekView extends ConsumerWidget {
     this.onImport,
     this.onWebViewImport,
   });
-
-  static const _dayLabels = ['一', '二', '三', '四', '五', '六', '日'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -72,10 +71,16 @@ class WeekView extends ConsumerWidget {
         Expanded(
           // 当前学期（上游）失败时不能当作无课程：同样进入失败重试状态。
           child: semesterAsync.hasError && !semesterAsync.isLoading
-              ? _LoadFailedView(onRetry: () => _retryReload(ref))
+              ? LoadFailedView(
+                  title: '课表加载失败',
+                  message: '课程数据没有读取出来，点击重试重新加载',
+                  onRetry: () => _retryReload(ref),
+                )
               : coursesAsync.when(
                   loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => _LoadFailedView(
+                  error: (e, _) => LoadFailedView(
+                    title: '课表加载失败',
+                    message: '课程数据没有读取出来，点击重试重新加载',
                     onRetry: () => _retryReload(ref),
                   ),
                   data: (allCourses) {
@@ -214,7 +219,7 @@ class _DayHeaderRow extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '周${WeekView._dayLabels[i]}',
+                      '周${AppConstants.weekdayLabels[i]}',
                       style: theme.textTheme.labelMedium?.copyWith(
                         fontWeight:
                             isToday ? FontWeight.bold : FontWeight.normal,
@@ -432,7 +437,7 @@ class CourseCard extends StatelessWidget {
   String get _semanticLabel {
     final details = <String>[
       course.name,
-      '周${WeekView._dayLabels[course.dayOfWeek - 1]}',
+      '周${AppConstants.weekdayLabels[course.dayOfWeek - 1]}',
       '第${course.startSection}到${course.endSection}节',
       if (course.location != null && course.location!.trim().isNotEmpty)
         course.location!.trim(),
@@ -466,45 +471,6 @@ Color courseCardColor(Color base, Brightness brightness) {
 
 double _contrastWithWhite(Color background) =>
     1.05 / (background.computeLuminance() + 0.05);
-
-/// 课表加载失败状态：易懂的说明加重试入口，不展示原始异常。
-class _LoadFailedView extends StatelessWidget {
-  final VoidCallback onRetry;
-  const _LoadFailedView({required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.cloud_off_outlined, size: 48, color: theme.hintColor),
-          const SizedBox(height: 12),
-          Text(
-            '课表加载失败',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.hintColor,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '课程数据没有读取出来，点击重试重新加载',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.hintColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('重试'),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 /// 无课程时的友好空状态。区分"无任何课程"和"本周无课"。
 class _EmptyWeekHint extends StatelessWidget {

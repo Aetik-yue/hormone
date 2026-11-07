@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'support/webview_parse_helper.dart';
 import 'package:recess/features/import/data/school_adapter.dart';
 import 'package:recess/features/import/data/configured_school_adapter.dart';
 import 'package:recess/features/import/data/generic_adapter.dart';
@@ -57,7 +58,7 @@ void main() {
   for (final adapter in [adapters[2], JgsuAdapter(), NcuAdapter()]) {
     test('${adapter.schoolName} 接口单条坏记录不截断后续课程', () async {
       final records = await runWeekFixture(adapter, '1周', mixedApi: true);
-      final (courses, skipped) = importCoursesFromDecoded(records);
+      final (courses, skipped) = parseWebviewCourses(records);
       expect(courses.map((c) => c.name), ['课程甲', '课程乙']);
       expect(skipped, 2);
     });
@@ -99,7 +100,7 @@ void main() {
           '1-8周',
           sections: sections,
         );
-        final (courses, skipped) = importCoursesFromDecoded(records);
+        final (courses, skipped) = parseWebviewCourses(records);
         expect(courses, isEmpty, reason: sections);
         expect(skipped, 1, reason: sections);
       }
@@ -119,7 +120,7 @@ void main() {
         10,
       ]);
       for (final text in ['1-4,未知周', '1.5周', '8-1周', '0-4周']) {
-        final (courses, skipped) = importCoursesFromDecoded(
+        final (courses, skipped) = parseWebviewCourses(
           await runWeekFixture(adapter, text),
         );
         expect(courses, isEmpty, reason: text);

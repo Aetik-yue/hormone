@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'package:recess/core/models/semester.dart';
 import 'package:recess/core/utils/week_calculator.dart';
+import 'package:recess/core/widgets/load_failed_view.dart';
 import 'package:recess/features/semester/application/semester_form_provider.dart';
 import 'package:recess/features/semester/application/semester_mutations.dart';
 import 'package:recess/features/semester/application/semester_providers.dart';
@@ -30,7 +31,9 @@ class SemesterScreen extends ConsumerWidget {
       body: semestersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         // 学期列表与当前学期任一失败都进入重试态；重试同时覆盖两个数据源。
-        error: (e, _) => _LoadFailedView(
+        error: (e, _) => LoadFailedView(
+          title: '学期加载失败',
+          message: '学期数据没有读取出来，点击重试重新加载',
           onRetry: () {
             ref.invalidate(activeSemesterProvider);
             ref.invalidate(semestersProvider);
@@ -78,45 +81,6 @@ class SemesterScreen extends ConsumerWidget {
         ref.invalidate(semesterFormProvider);
       }
     });
-  }
-}
-
-/// 学期加载失败状态：易懂的说明加重试入口，不展示原始异常。
-class _LoadFailedView extends StatelessWidget {
-  final VoidCallback onRetry;
-  const _LoadFailedView({required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.cloud_off_outlined, size: 48, color: theme.hintColor),
-          const SizedBox(height: 12),
-          Text(
-            '学期加载失败',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.hintColor,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '学期数据没有读取出来，点击重试重新加载',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.hintColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('重试'),
-          ),
-        ],
-      ),
-    );
   }
 }
 

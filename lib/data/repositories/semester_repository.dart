@@ -10,13 +10,6 @@ class SemesterRepository {
 
   SemesterRepository(this._db);
 
-  /// 监听全部学期（用于学期管理页）。
-  Stream<List<Semester>> watchSemesters() {
-    return _db.select(_db.semesters).watch().map(
-          (rows) => rows.map((r) => r.toDomain()).toList(),
-        );
-  }
-
   Future<List<Semester>> getSemesters() async {
     final rows = await _db.select(_db.semesters).get();
     return rows.map((r) => r.toDomain()).toList();

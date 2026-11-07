@@ -30,10 +30,6 @@ class JgsuAdapter extends SchoolAdapter {
   String get loginUrl => 'https://ehall.jgsu.edu.cn/';
 
   @override
-  String get scheduleUrl =>
-      'https://ehall.jgsu.edu.cn/jwapp/sys/wdkb/index.do';
-
-  @override
   bool isSchedulePage(String currentUrl) {
     // 课表应用页与其数据接口同前缀；大厅门户页不算课表页。
     return currentUrl.contains('/jwapp/sys/wdkb');

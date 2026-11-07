@@ -1,5 +1,6 @@
 import 'package:recess/core/models/semester.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'support/webview_parse_helper.dart';
 import 'package:recess/features/import/application/webview_import_provider.dart';
 
 void main() {
@@ -67,7 +68,7 @@ void main() {
       'weeks': [3, 1, 3, 2],
       ...changes,
     };
-    final (courses, skipped) = importCoursesFromDecoded([
+    final (courses, skipped) = parseWebviewCourses([
       course({}),
       course({'startSection': 17, 'endSection': 17}),
       course({'endSection': 17}),

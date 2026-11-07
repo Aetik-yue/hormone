@@ -18,11 +18,11 @@ enum AdapterSupportLevel {
   generic,
 }
 
-/// 学校教务系统适配器：定义登录页、课表页 URL 及 JS 提取脚本。
+/// 学校教务系统适配器：定义登录页 URL 及 JS 提取脚本。
 ///
 /// 每所学校实现一个适配器，WebView 导入流程通过适配器驱动：
 /// 1. 打开 [loginUrl] 让用户登录
-/// 2. 检测登录成功后跳转 [scheduleUrl]
+/// 2. 用 [isSchedulePage] 检测是否已到达课表页
 /// 3. 页面加载完成后注入 [extractJs] 提取课程 JSON
 /// 4. 解析 JSON 为 [ExtractedCourse] 列表
 abstract class SchoolAdapter {
@@ -33,9 +33,6 @@ abstract class SchoolAdapter {
 
   /// 教务系统登录页 URL。
   String get loginUrl;
-
-  /// 课程表页面 URL（登录成功后跳转）。
-  String get scheduleUrl;
 
   /// 判断当前 URL 是否已到达课表页（用于自动检测登录成功）。
   bool isSchedulePage(String currentUrl);
@@ -73,9 +70,6 @@ abstract class SchoolAdapter {
 
   /// 打开教务系统前需要告知用户的访问条件（如校外需连 VPN），无则为 null。
   String? get accessNote => null;
-
-  /// 是否为内置适配器（非用户自定义）。
-  bool get isBuiltin => true;
 }
 
 /// 从教务系统提取的单门课程（中间模型，尚未入库）。

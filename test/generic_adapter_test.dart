@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'support/webview_parse_helper.dart';
 import 'package:recess/features/import/data/generic_adapter.dart';
 import 'package:recess/features/import/data/configured_school_adapter.dart';
 import 'package:recess/features/import/data/ncu_adapter.dart';
 import 'package:recess/features/import/data/school_adapter.dart';
-import 'package:recess/features/import/application/webview_import_provider.dart';
 
 void main() {
   for (final adapter in <SchoolAdapter>[
@@ -29,13 +29,13 @@ void main() {
           final records = await _runSingleLine(
             adapter, ['课程甲', '教师甲', '教室甲', entry.key].join(separator),
           );
-          final (courses, skipped) = importCoursesFromDecoded(records);
+          final (courses, skipped) = parseWebviewCourses(records);
           expect(skipped, 0, reason: '$separator ${entry.key}');
           expect(courses.single.name, '课程甲');
           expect(courses.single.weeks, entry.value);
         }
       }
-      final (invalid, skipped) = importCoursesFromDecoded(
+      final (invalid, skipped) = parseWebviewCourses(
         await _runSingleLine(adapter, '课程甲,教师甲,教室甲,1-4,未知周,单周'),
       );
       expect(invalid, isEmpty);

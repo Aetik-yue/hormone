@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:recess/core/constants/app_constants.dart';
 import 'package:recess/core/models/course_platform.dart';
 import 'package:recess/core/models/import_diagnostic.dart';
+import 'package:recess/core/utils/json_parsing.dart';
 import 'package:recess/features/import/domain/import_course.dart';
 
 /// JSON 课程导入器。采用「显式领域模板」——字段与 App 内部模型一一对应，
@@ -118,13 +119,13 @@ class JsonCourseImporter {
       return null;
     }
 
-    final dayOfWeek = _toInt(m['dayOfWeek']);
+    final dayOfWeek = toIntOrNull(m['dayOfWeek']);
     if (dayOfWeek == null || dayOfWeek < 1 || dayOfWeek > 7) {
       skip('dayOfWeek 非法');
       return null;
     }
-    final startSection = _toInt(m['startSection']) ?? 1;
-    final endSection = _toInt(m['endSection']) ?? startSection;
+    final startSection = toIntOrNull(m['startSection']) ?? 1;
+    final endSection = toIntOrNull(m['endSection']) ?? startSection;
     if (startSection < 1 ||
         endSection > AppConstants.maxSections ||
         endSection < startSection) {
@@ -134,7 +135,7 @@ class JsonCourseImporter {
 
     List<int> weeks;
     if (m['weeks'] is List) {
-      final rawWeeks = (m['weeks'] as List).map(_toInt).toList();
+      final rawWeeks = (m['weeks'] as List).map(toIntOrNull).toList();
       final inRange = rawWeeks
           .where((w) =>
               w != null && w >= 1 && (totalWeeks == null || w <= totalWeeks))
@@ -161,51 +162,30 @@ class JsonCourseImporter {
       return null;
     }
 
-    final colorValue = _parseColor(m['color']?.toString());
+    final colorValue = parseHexColor(
+      m['color']?.toString(),
+      fallback: AppConstants.defaultCourseColor,
+    );
 
     return ImportCourse(
       name: name,
-      teacher: _toStringOrNull(m['teacher']),
-      location: _toStringOrNull(m['location']),
+      teacher: toStringOrNull(m['teacher']),
+      location: toStringOrNull(m['location']),
       dayOfWeek: dayOfWeek,
       startSection: startSection,
       endSection: endSection,
       startTime: hasTimeSemantics
           ? m['startTime']?.toString()
-          : _toStringOrNull(m['startTime']),
+          : toStringOrNull(m['startTime']),
       endTime: hasTimeSemantics
           ? m['endTime']?.toString()
-          : _toStringOrNull(m['endTime']),
+          : toStringOrNull(m['endTime']),
       useExplicitTimes: m['useExplicitTimes'] as bool? ??
           (isBackup ? false : null),
       weeks: weeks,
       colorValue: colorValue,
-      notes: _toStringOrNull(m['notes']),
+      notes: toStringOrNull(m['notes']),
       source: 'json',
     );
-  }
-
-  static int? _toInt(dynamic v) {
-    if (v is int) return v;
-    if (v is double) return v.toInt();
-    if (v is String) return int.tryParse(v);
-    return null;
-  }
-
-  static String? _toStringOrNull(dynamic v) {
-    if (v == null) return null;
-    final s = v.toString().trim();
-    return s.isEmpty ? null : s;
-  }
-
-  /// 解析颜色：支持 "#RRGGBB" / "0xFFRRGGBB" / 纯 "RRGGBB"。失败回退默认蓝。
-  static int _parseColor(String? s) {
-    if (s == null) return AppConstants.defaultCourseColor;
-    var hex = s.replaceAll('#', '').replaceAll('0x', '').replaceAll('0X', '');
-    if (hex.length == 6) hex = 'FF$hex';
-    if (hex.length == 8) {
-      return int.tryParse(hex, radix: 16) ?? AppConstants.defaultCourseColor;
-    }
-    return AppConstants.defaultCourseColor;
   }
 }

@@ -34,7 +34,6 @@ class ImportState {
   /// 本次文件的逐条导入诊断：随预览、错误、提交失败与完成状态保留，
   /// 选择新文件时整体清理（见 [ImportNotifier.pickAndParse]）。
   final List<ImportDiagnostic> diagnostics;
-  final int totalWeeks;
   final ImportMode mode;
 
   /// JSON 文件里按课程名给出的课程平台，确认导入时写入目标学期。
@@ -46,7 +45,6 @@ class ImportState {
     this.errorMessage,
     this.importedCount = 0,
     this.diagnostics = const [],
-    this.totalWeeks = 18,
     this.mode = ImportMode.replace,
     this.platforms = const {},
   });
@@ -57,7 +55,6 @@ class ImportState {
     String? errorMessage,
     int? importedCount,
     List<ImportDiagnostic>? diagnostics,
-    int? totalWeeks,
     ImportMode? mode,
     CoursePlatformGroups? platforms,
   }) =>
@@ -67,7 +64,6 @@ class ImportState {
         errorMessage: errorMessage ?? this.errorMessage,
         importedCount: importedCount ?? this.importedCount,
         diagnostics: diagnostics ?? this.diagnostics,
-        totalWeeks: totalWeeks ?? this.totalWeeks,
         mode: mode ?? this.mode,
         platforms: platforms ?? this.platforms,
       );
@@ -139,7 +135,6 @@ class ImportNotifier extends StateNotifier<ImportState> {
       state = state.copyWith(
         status: ImportStatus.preview,
         courses: courses,
-        totalWeeks: semester.totalWeeks,
         diagnostics: diagnostics,
         platforms: platforms,
       );

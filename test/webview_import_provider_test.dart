@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'support/webview_parse_helper.dart';
 
 import 'package:recess/features/import/application/webview_import_provider.dart';
 import 'package:recess/features/import/domain/import_course.dart';
@@ -42,27 +43,27 @@ void main() {
     });
   });
 
-  group('importCoursesFromDecoded', () {
+  group('parseWebviewCourses', () {
     test('过滤无法识别星期的课程并统计跳过数', () {
       final decoded = [
         {'name': 'A', 'dayOfWeek': 1, 'startSection': 1, 'endSection': 1, 'weeks': [1]},
         {'name': 'B', 'dayOfWeek': 0, 'startSection': 1, 'endSection': 1, 'weeks': [1]},
         {'name': 'C', 'dayOfWeek': 7, 'startSection': 2, 'endSection': 2, 'weeks': [2]},
       ];
-      final (courses, skipped) = importCoursesFromDecoded(decoded);
+      final (courses, skipped) = parseWebviewCourses(decoded);
       expect(courses, hasLength(2));
       expect(courses.map((c) => c.name), unorderedEquals(['A', 'C']));
       expect(skipped, 1);
     });
 
     test('非 List 返回空且不算跳过', () {
-      final (courses, skipped) = importCoursesFromDecoded('not a list');
+      final (courses, skipped) = parseWebviewCourses('not a list');
       expect(courses, isEmpty);
       expect(skipped, 0);
     });
 
     test('转换结果保留原始字段', () {
-      final (courses, _) = importCoursesFromDecoded([
+      final (courses, _) = parseWebviewCourses([
         {
           'name': '高数',
           'teacher': '张三',

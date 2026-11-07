@@ -18,9 +18,6 @@ class GenericAdapter extends SchoolAdapter {
   String get loginUrl => _url;
 
   @override
-  String get scheduleUrl => _url;
-
-  @override
   bool isSchedulePage(String currentUrl) {
     // 通用适配器：任何页面都允许尝试提取（用户手动触发）
     return true;

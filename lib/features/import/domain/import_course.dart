@@ -60,8 +60,9 @@ class ImportCourse {
 
   /// 人类可读的星期+节次摘要，用于预览卡片副标题。
   String get sectionLabel {
-    const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-    final day = dayOfWeek >= 1 && dayOfWeek <= 7 ? days[dayOfWeek - 1] : '?';
+    final day = dayOfWeek >= 1 && dayOfWeek <= 7
+        ? '周${AppConstants.weekdayLabels[dayOfWeek - 1]}'
+        : '?';
     final time = (useExplicitTimes && startTime != null && endTime != null)
         ? ' $startTime-$endTime'
         : '';

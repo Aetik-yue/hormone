@@ -12,10 +12,6 @@ void main() {
     expect(adapter.schoolName, '南昌大学');
     expect(adapter.loginUrl, 'https://jwpt.ncu.edu.cn/jsxsd/sso.jsp');
     expect(
-      adapter.scheduleUrl,
-      'https://jwpt.ncu.edu.cn/jsxsd/kbcx/xskbcx_cxXsgg.html',
-    );
-    expect(
       adapter.isSchedulePage(
         'https://jwxt.ncu.edu.cn/student/course/schedule',
       ),

@@ -14,12 +14,6 @@ dynamic decodeWebviewExtractResult(Object? result) {
   }
 }
 
-/// 旧调用方可继续只读取课程与跳过总数；与预览共用同一次运行时校验。
-(List<ImportCourse>, int) importCoursesFromDecoded(dynamic decoded) {
-  final result = _parseCourses(decoded);
-  return (result.$1, result.$2.values.fold(0, (a, b) => a + b));
-}
-
 (List<ImportCourse>, Map<String, int>) _parseCourses(dynamic decoded) {
   final courses = <ImportCourse>[];
   final reasons = <String, int>{};

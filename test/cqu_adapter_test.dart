@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:recess/features/import/application/webview_import_provider.dart';
+import 'support/webview_parse_helper.dart';
 import 'package:recess/features/import/data/cqu_adapter.dart';
 
 void main() {
@@ -10,10 +10,6 @@ void main() {
     final adapter = CquAdapter();
 
     expect(adapter.loginUrl, 'https://my.cqu.edu.cn');
-    expect(
-      adapter.scheduleUrl,
-      'https://my.cqu.edu.cn/tt/university-timetable',
-    );
     expect(
       adapter.isSchedulePage('https://my.cqu.edu.cn/tt/university-timetable'),
       isTrue,
@@ -71,7 +67,7 @@ void main() {
       expect(courses.single['name'], '边缘计算');
       expect(courses.single['dayOfWeek'], DateTime.monday);
       expect(courses.single['teacher'], '汪成亮');
-      final (imported, skipped) = importCoursesFromDecoded(courses);
+      final (imported, skipped) = parseWebviewCourses(courses);
       expect(imported, hasLength(1));
       expect(imported.single.teacher, '汪成亮');
       expect(skipped, 0);
@@ -229,7 +225,7 @@ void main() {
       ''');
 
       expect(courses, hasLength(2));
-      final (imported, skipped) = importCoursesFromDecoded(courses);
+      final (imported, skipped) = parseWebviewCourses(courses);
       expect(skipped, 0);
       expect(imported.map((c) => c.name), [
         '操作系统[FUSE 用户空间文件系统管理 ]',
@@ -273,7 +269,7 @@ void main() {
 
       expect(courses, hasLength(3));
       expect(courses.first['name'], '操作系统');
-      final (imported, skipped) = importCoursesFromDecoded(courses);
+      final (imported, skipped) = parseWebviewCourses(courses);
       expect(skipped, 0);
       final labs = imported.where((c) => c.startSection == 6).toList();
       expect(labs, hasLength(2));
@@ -382,7 +378,7 @@ void main() {
 
       expect(courses, hasLength(1));
       expect(courses.single['dayOfWeek'], 0);
-      final (imported, skipped) = importCoursesFromDecoded(courses);
+      final (imported, skipped) = parseWebviewCourses(courses);
       expect(imported, isEmpty);
       expect(skipped, 1);
     });

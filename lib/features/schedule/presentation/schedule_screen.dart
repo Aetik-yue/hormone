@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:recess/core/constants/app_constants.dart';
 import 'package:recess/core/models/course.dart';
 import 'package:recess/core/utils/week_calculator.dart';
 import 'package:recess/features/course/domain/course_clock.dart';
@@ -419,7 +420,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           );
 
     final theme = Theme.of(context);
-    final todayLabel = _dayLabels[now.weekday - 1];
+    final todayLabel = AppConstants.weekdayLabels[now.weekday - 1];
     final dateLabel = '${now.month}月${now.day}日';
 
     await showModalBottomSheet<void>(
@@ -578,8 +579,6 @@ class _ScheduleMenuItem extends StatelessWidget {
     );
   }
 }
-
-const _dayLabels = ['一', '二', '三', '四', '五', '六', '日'];
 
 /// 今日课程时间线的状态标签。
 class _StatusChip extends StatelessWidget {

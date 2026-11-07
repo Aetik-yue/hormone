@@ -45,8 +45,4 @@ class SelectedWeekNotifier extends StateNotifier<int> {
     final clamped = week < 1 ? 1 : (week > totalWeeks ? totalWeeks : week);
     state = clamped;
   }
-
-  void nextWeek(int totalWeeks) => goTo(state < totalWeeks ? state + 1 : state);
-
-  void prevWeek() => goTo(state > 1 ? state - 1 : state);
 }

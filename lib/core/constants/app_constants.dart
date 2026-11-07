@@ -5,6 +5,10 @@ class AppConstants {
   /// 课程默认色（冷暖平衡色板的蓝色，ARGB）。
   static const int defaultCourseColor = 0xFF4399F1;
 
+  /// 一周七天的单字标签（一…日），`dayOfWeek` 1=周一 … 7=周日。
+  /// 带“周”的写法由它派生：`'周${AppConstants.weekdayLabels[i]}'`。
+  static const List<String> weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
+
   /// 默认节次 -> 开始时间（24h），用于时间轴展示。
   static const Map<int, String> sectionStartTimes = {
     1: '08:00',

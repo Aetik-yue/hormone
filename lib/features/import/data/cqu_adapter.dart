@@ -21,9 +21,6 @@ class CquAdapter extends SchoolAdapter {
   String get accessNote => '校外需先连接校园网或 aTrust VPN';
 
   @override
-  String get scheduleUrl => 'https://my.cqu.edu.cn/tt/university-timetable';
-
-  @override
   bool isSchedulePage(String currentUrl) {
     return currentUrl.contains('/tt/university-timetable') ||
         currentUrl.contains('/workspace/curriculum');

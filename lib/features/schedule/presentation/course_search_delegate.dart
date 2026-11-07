@@ -99,7 +99,7 @@ class _ResultTile extends StatelessWidget {
       title: Text(course.name),
       subtitle: Text(
         [
-          '周${_dayLabels[course.dayOfWeek - 1]} 第${course.startSection}-${course.endSection}节',
+          '周${AppConstants.weekdayLabels[course.dayOfWeek - 1]} 第${course.startSection}-${course.endSection}节',
           if (course.teacher != null && course.teacher!.isNotEmpty)
             course.teacher!,
           if (course.location != null && course.location!.isNotEmpty)
@@ -112,8 +112,6 @@ class _ResultTile extends StatelessWidget {
     );
   }
 }
-
-const _dayLabels = ['一', '二', '三', '四', '五', '六', '日'];
 
 class _EmptyHint extends StatelessWidget {
   final String text;

@@ -26,24 +26,16 @@ class ConfiguredSchoolAdapter extends SchoolAdapter {
   final String loginUrl;
 
   final AcademicSystemType system;
-  final String? _scheduleUrl;
-  final List<String> scheduleMarkers;
 
   const ConfiguredSchoolAdapter({
     required this.schoolName,
     required this.loginUrl,
     required this.system,
-    String? scheduleUrl,
-    this.scheduleMarkers = const [],
-  }) : _scheduleUrl = scheduleUrl;
+  });
 
+  // 配置型适配器不做课表页自动检测，提取由用户在页面上手动触发。
   @override
-  String get scheduleUrl => _scheduleUrl ?? loginUrl;
-
-  @override
-  bool isSchedulePage(String currentUrl) {
-    return scheduleMarkers.any(currentUrl.contains);
-  }
+  bool isSchedulePage(String currentUrl) => false;
 
   @override
   AdapterSupportLevel get supportLevel => system == AcademicSystemType.generic

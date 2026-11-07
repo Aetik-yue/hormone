@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:recess/core/constants/app_constants.dart';
 import 'package:recess/features/import/domain/import_course.dart';
 
 /// 共享的导入预览列表：按星期分组，支持勾选与时间冲突标红。
@@ -77,8 +78,7 @@ class ImportPreviewList extends StatelessWidget {
   }
 
   static String _dayLabel(int day) {
-    const labels = ['一', '二', '三', '四', '五', '六', '日'];
-    return day >= 1 && day <= 7 ? '周${labels[day - 1]}' : '未知';
+    return day >= 1 && day <= 7 ? '周${AppConstants.weekdayLabels[day - 1]}' : '未知';
   }
 }
 
