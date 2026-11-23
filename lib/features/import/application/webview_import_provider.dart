@@ -55,9 +55,6 @@ class WebviewImportState {
 /// 平台相关操作（WebView 控制器、横竖屏切换、JS 注入、对话框）留在
 /// Screen 里，这里只承载可单测的纯状态转换与抓取结果解析。
 class WebviewImportNotifier extends StateNotifier<WebviewImportState> {
-  /// 导航到课表页后的自动重试次数（frame 内导航不触发 onPageFinished）。
-  int navRetry = 0;
-
   WebviewImportNotifier() : super(const WebviewImportState());
 
   void startLogin() => state = state.copyWith(phase: WebviewPhase.login);

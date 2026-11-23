@@ -11,6 +11,7 @@ import 'package:recess/core/models/course.dart';
 import 'package:recess/core/models/course_platform.dart';
 import 'package:recess/data/providers/database_providers.dart';
 import 'package:recess/features/import/application/course_capture_orientation.dart';
+import 'package:recess/features/import/application/webview_extraction_protocol.dart';
 import 'package:recess/features/import/application/webview_import_provider.dart';
 import 'package:recess/features/import/domain/import_course.dart';
 import 'package:recess/features/semester/application/semester_providers.dart';
@@ -39,6 +40,7 @@ class WebviewImportScreen extends ConsumerStatefulWidget {
 
 class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
   late final CourseCaptureOrientationController _orientationController;
+  late final WebviewExtractionProtocol _extraction;
   SchoolAdapter? _adapter;
   WebViewController? _controller;
   bool _cacheMissRecoveryAttempted = false;
@@ -50,6 +52,39 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
     super.initState();
     _orientationController =
         widget.orientationController ?? CourseCaptureOrientationController();
+    _extraction = WebviewExtractionProtocol(
+      isReady: () => _adapter != null && _controller != null,
+      isMounted: () => mounted,
+      enterCaptureMode: _orientationController.enterCaptureMode,
+      leaveCaptureMode: _orientationController.leaveCaptureMode,
+      waitForLandscapeLayout: _waitForLandscapeLayout,
+      wait: (duration) => Future<void>.delayed(duration),
+      executeJs: (js) => _controller!.runJavaScriptReturningResult(js),
+      loadPreviewContext: () async {
+        final semester = await ref.read(activeSemesterProvider.future);
+        if (semester == null) throw StateError('请先创建学期');
+        return WebviewPreviewContext.fromSemester(semester);
+      },
+      buildExtractJs: (previewContext) =>
+          _adapter!.extractForSemester(previewContext.totalWeeks),
+      currentUrl: () async {
+        final controller = _controller;
+        return controller == null ? null : controller.currentUrl();
+      },
+      isSchedulePage: (url) => _adapter!.isSchedulePage(url),
+      onExtracting: (extracting) {
+        if (mounted) {
+          ref.read(webviewImportProvider.notifier).setExtracting(extracting);
+        }
+      },
+      onNotice: (message) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
+      },
+    );
   }
 
   @override
@@ -515,169 +550,62 @@ class _WebviewImportScreenState extends ConsumerState<WebviewImportScreen> {
 
   Future<void> _tryExtract() async {
     if (_adapter == null || _controller == null) return;
-    final notifier = ref.read(webviewImportProvider.notifier);
     if (ref.read(webviewImportProvider).extracting) {
       return; // 防止 onPageFinished 与手动点击并发
     }
-    notifier.setExtracting(true);
-
-    try {
-      // 登录和浏览阶段保持正常竖屏，只在坐标敏感的抓取瞬间临时横屏。
-      final landscapeReady = await _orientationController.enterCaptureMode();
-      if (!mounted) {
-        await _orientationController.leaveCaptureMode();
-        return;
-      }
-      if (!landscapeReady) {
+    final outcome = await _extraction.run();
+    if (!mounted) return;
+    switch (outcome) {
+      case WebviewExtractPreview(:final preview):
+        ref.read(webviewImportProvider.notifier).showValidatedPreview(preview);
+      case WebviewExtractNotFound(:final debugInfo):
+        _showNotFoundDialog(debugInfo);
+      case WebviewExtractNavFailed():
+        _showNavFailedDialog();
+      case WebviewExtractError(:final error):
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法自动切换横屏，请手动将手机旋转为横屏后再抓取')),
+          SnackBar(content: Text('抓取失败：$error')),
         );
-      } else {
-        // 等待 Android 完成 Activity 与 WebView 尺寸变更，避免读取旧的竖屏坐标。
-        final layoutChanged = await _waitForLandscapeLayout();
-        if (!mounted) {
-          await _orientationController.leaveCaptureMode();
-          return;
-        }
-        if (!layoutChanged) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('屏幕尚未切换为横屏，请手动旋转手机后再抓取')),
-          );
-        }
-      }
-
-      // 等待 SPA 动态渲染完成
-      await Future.delayed(const Duration(seconds: 2));
-
-      final semester = await ref.read(activeSemesterProvider.future);
-      if (semester == null) throw StateError('请先创建学期');
-      final previewContext = WebviewPreviewContext.fromSemester(semester);
-
-      // 注入 JS 提取课程
-      final result =
-          await _controller!.runJavaScriptReturningResult(_adapter!.extractForSemester(previewContext.totalWeeks));
-      final decoded = decodeWebviewExtractResult(result);
-
-      // 适配器导航/等待信号：已跳转课表页或课表仍在加载，延迟后自动重试
-      if (decoded is Map<String, dynamic>) {
-        if (decoded['__nav'] == true || decoded['__pending'] == true) {
-          notifier.setExtracting(false);
-          if (notifier.navRetry >= 3) {
-            notifier.navRetry = 0;
-            await _orientationController.leaveCaptureMode();
-            if (!mounted) return;
-            _showNavFailedDialog();
-            return;
-          }
-          notifier.navRetry++;
-          await Future.delayed(
-            decoded['__nav'] == true
-                ? const Duration(seconds: 3)
-                : const Duration(seconds: 2),
-          );
-          if (mounted) await _tryExtract();
-          return;
-        }
-      }
-      notifier.navRetry = 0;
-      if (decoded == null) {
-        throw Exception('未抓取到课程数据，请确认已进入课表页面后重试');
-      }
-      if (decoded is! List) {
-        throw Exception('课表数据格式异常，请确认已进入课表页面后重试');
-      }
-
-      final preview = previewWebviewCourses(decoded, previewContext);
-      final courses = preview.courses;
-
-      if (courses.isEmpty && preview.skippedCount == 0) {
-        // 抓取为空，捕获调试信息
-        final debugInfo = await _controller!.runJavaScriptReturningResult(r'''
-          (function() {
-            var info = 'URL: ' + location.href + '\n\n';
-            var els = document.body.querySelectorAll('*');
-            var found = false;
-            for (var i = 0; i < els.length; i++) {
-              var t = (els[i].textContent || '');
-              if (/\[\d{4,}-\d{2,}/.test(t) && t.length < 300 && t.length > 10) {
-                info += '=== 课程元素 outerHTML ===\n';
-                info += els[i].outerHTML.substring(0, 800) + '\n\n';
-                info += '=== 父元素 outerHTML (前1500字符) ===\n';
-                var p = els[i].parentElement;
-                if (p) info += p.outerHTML.substring(0, 1500);
-                found = true;
-                break;
-              }
-            }
-            if (!found) {
-              info += '未找到含课程编号的元素\n\n';
-              info += '=== body.innerText 前1500字符 ===\n';
-              info += (document.body ? document.body.innerText : '').substring(0, 1500);
-            }
-            return info;
-          })()
-        ''');
-        final debugStr = debugInfo is String ? debugInfo : debugInfo.toString();
-        notifier.setExtracting(false);
-        await _orientationController.leaveCaptureMode();
-        if (!mounted) return;
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('未找到课程数据'),
-              content: const SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('请确认：'),
-                    SizedBox(height: 8),
-                    Text('1. 已成功登录教务系统'),
-                    Text('2. 当前页面是课程表页面'),
-                    Text('3. 点击右上角「抓取课表」重试'),
-                    SizedBox(height: 8),
-                    Text('如果仍无法抓取，说明你的学校教务系统暂不支持。'),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('关闭'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    _showDebugInfo(context, debugStr);
-                  },
-                  child: const Text('查看详情'),
-                ),
-              ],
-            ),
-          );
-        }
-        return;
-      }
-
-      await _orientationController.leaveCaptureMode();
-      if (!mounted) return;
-      notifier.showValidatedPreview(preview);
-    } catch (e) {
-      if (mounted) notifier.setExtracting(false);
-      await _orientationController.leaveCaptureMode();
-      if (!mounted) return;
-      // 跳转进行中注入异常（JS 上下文销毁）时静默等待，onPageFinished 会自动重试
-      final currentUrl = await _controller?.currentUrl();
-      if (currentUrl != null && _adapter!.isSchedulePage(currentUrl)) {
-        return;
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('抓取失败：$e')),
-        );
-      }
+      case WebviewExtractSilent():
+        break;
     }
+  }
+
+  void _showNotFoundDialog(String debugStr) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('未找到课程数据'),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('请确认：'),
+              SizedBox(height: 8),
+              Text('1. 已成功登录教务系统'),
+              Text('2. 当前页面是课程表页面'),
+              Text('3. 点击右上角「抓取课表」重试'),
+              SizedBox(height: 8),
+              Text('如果仍无法抓取，说明你的学校教务系统暂不支持。'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('关闭'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _showDebugInfo(context, debugStr);
+            },
+            child: const Text('查看详情'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 自动导航课表页多次仍失败时的提示。
